@@ -9,7 +9,7 @@ import FBI.grid as grid
 import os
 import gc
 import numpy as np
-from readwrite import lompe_extract, fbi_save_hdf5
+from FBI.readwrite import lompe_extract, fbi_save_hdf5
 from FBI.utils import find_indexes_within_time_range, get_kp_iterable
 from FBI.fitacf import get_scan_times, all_data_make_iterable, median_filter, fitacf_get_k_vector_circle
 from pydarn.utils.coordinates import gate2geographic_location
