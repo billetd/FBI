@@ -23,7 +23,7 @@ local = [
 ]
 # To use the online versions instead
 deps-from-github = [
-    "lompe@lompe[deps-from-github,extras] @ git+https://github.com/billetd/lompe.git@main",
+    "lompe@lompe[deps-from-github,extras]@git+https://github.com/billetd/lompe.git@main",
     "geodarn@git+https://github.com/billetd/geodarn.git@main",
     "pydarnio@git+https://github.com/billetd/pyDARNio@borealis_v0.7",
     "pydarn@git+https://github.com/SuperDARN/pydarn.git@develop",
