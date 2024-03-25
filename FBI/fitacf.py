@@ -63,6 +63,8 @@ def all_data_make_iterable(all_data, range_times, scan_delta):
 
     all_data_iterable = []
     for counter, scan_time in enumerate(range_times):
+
+        print('Found scan' + str(counter) + ' of ' + str(len(range_times)))
         all_radars_this_scan = []
         for file_index in range(len(all_data)):
 

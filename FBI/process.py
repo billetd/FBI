@@ -39,6 +39,7 @@ def process(all_data, timerange, lompe_dir, cores=1, scandelta_override=None):
     apex = apexpy.Apex(range_times[0], refh=300)
 
     # Get Kp indices for time in question, as an interable
+    print('Getting Kp indexes...')
     kps = get_kp_iterable(range_times)
 
     # Get the Superdarn grid
@@ -46,12 +47,11 @@ def process(all_data, timerange, lompe_dir, cores=1, scandelta_override=None):
     darn_grid_stuff = grid.sdarn_grid(apex)
 
     # Remove data we don't use, and make an iterable
+    print('Shrinking data...')
     all_data_iterable = all_data_make_iterable(all_data, range_times, scan_delta)
 
     # lompe_data = lompe_parallel(range_times[0], all_data_iterable[0], kps[0], scan_delta, darn_grid_stuff)
 
-    import time as ti
-    start = ti.time()
     # Initialise workers for parallelisation (or not) and put in constants
     ray.init(num_cpus=cores)
     scan_delta_id = ray.put(scan_delta)
@@ -61,7 +61,6 @@ def process(all_data, timerange, lompe_dir, cores=1, scandelta_override=None):
                   in zip(range_times, all_data_iterable, kps)]
     lompes = ray.get(result_ids)
     ray.shutdown()
-    print("--- %s seconds ---" % (ti.time() - start))
 
     # Save as a HDF5 file
     fbi_save_hdf5(lompes, timerange, lompe_dir)

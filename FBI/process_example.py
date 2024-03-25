@@ -5,8 +5,8 @@ Example code for processing input fitacf data into lompe outputs
 import datetime as dt
 import glob
 import warnings
-import fitacf
-import process
+import FBI.fitacf as fitacf
+import FBI.process as process
 import gc
 
 
@@ -49,8 +49,8 @@ def dailies_between_dates():
 
     # Dates to process between
     # We will make one FBI output file for each day
-    start_date = dt.date(2024, 1, 5)
-    end_date = dt.date(2024, 2, 14)
+    start_date = dt.datetime(2024, 1, 5)
+    end_date = dt.datetime(2024, 2, 14)
     dates = [start_date + i * dt.timedelta(days=1) for i in range((end_date - start_date).days + 1)]
 
     # Iterate over dates
@@ -78,7 +78,7 @@ def dailies_between_dates():
         all_data = fitacf.read_fitacfs(fitacf_files, cores=5)
 
         # Process this day
-        process.process(all_data, [date, date + dt.timedelta(days=1)], lompe_dir,
+        process.process(all_data, [date, date + dt.timedelta(days=1)], fbi_dir,
                         cores=20, scandelta_override=6)
 
         del all_data

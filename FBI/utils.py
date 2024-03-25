@@ -41,7 +41,7 @@ def get_kp_iterable(times):
     """
 
     # Get all the indices
-    indices = sw.celestrak.ap_kp_3h()
+    indices = sw.celestrak.ap_kp_3h(update=True)
     all_kps = indices.Kp
 
     # List to hold kps within the times
