@@ -9,6 +9,7 @@ import FBI.grid as grid
 import os
 import gc
 import numpy as np
+import warnings
 from FBI.readwrite import lompe_extract, fbi_save_hdf5
 from FBI.utils import find_indexes_within_time_range, get_kp_iterable
 from FBI.fitacf import get_scan_times, all_data_make_iterable, median_filter, fitacf_get_k_vector_circle
@@ -27,6 +28,9 @@ def process(all_data, timerange, lompe_dir, cores=1, scandelta_override=None):
     :param cores:
     :param scandelta_override:
     """
+
+    # Supress the annoying Pandas warnings because append is depreciated
+    warnings.simplefilter(action='ignore', category=FutureWarning)
 
     # Get scan times within timerange, based on whichever radar started earlier
     scan_times, range_times, scan_delta = get_scan_times(all_data, timerange)

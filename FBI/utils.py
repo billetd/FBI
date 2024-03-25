@@ -1,4 +1,3 @@
-import numpy as np
 import spaceweather as sw
 import math
 import datetime as dt
@@ -18,8 +17,8 @@ def find_indexes_within_time_range(datetimes, target_time, catchtime=None, behin
     if catchtime is None:
         catchtime = 1
     if behind is True:
-        start_index = target_time - dt.timedelta(seconds=catchtime * 2)
-        end_index = target_time - dt.timedelta(seconds=catchtime * 2)
+        start_index = bisect.bisect_right(datetimes, target_time - dt.timedelta(seconds=catchtime * 2))
+        end_index = bisect.bisect_right(datetimes, target_time + dt.timedelta(seconds=catchtime * 2))
     else:
         start_index = bisect.bisect_right(datetimes, target_time - dt.timedelta(seconds=catchtime))
         end_index = bisect.bisect_right(datetimes, target_time + dt.timedelta(seconds=catchtime))

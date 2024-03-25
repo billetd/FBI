@@ -8,7 +8,6 @@ import os
 import datetime as dt
 import numpy as np
 import math
-import pandas as pd
 from FBI.utils import find_indexes_within_time_range
 
 
@@ -76,7 +75,6 @@ def all_data_make_iterable(all_data, range_times, scan_delta):
 
     for counter, scan_time in enumerate(range_times):
 
-        print('Found scan ' + str(counter) + ' of ' + str(len(range_times)))
         all_radars_this_scan = []
         for file_index in range(len(all_data)):
 
