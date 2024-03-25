@@ -14,19 +14,16 @@ dependencies = [
     "h5py",
     "matplotlib",
     "cartopy",
+    "lompe @ lompe[deps-from-github,extras] @ git+https://github.com/billetd/lompe.git@main",
+    "geodarn @ git+https://github.com/billetd/geodarn.git@main",
+    "pydarnio @ git+https://github.com/billetd/pyDARNio@borealis_v0.7",
+    "pydarn @ git+https://github.com/SuperDARN/pydarn.git@develop",
 ]
 
 [project.optional-dependencies]
 # For the case where you have already installed these locally
 #  (e.g. with a --editable install)
 local = [
-]
-# To use the online versions instead
-deps-from-github = [
-    "lompe @ lompe[deps-from-github,extras] @ git+https://github.com/billetd/lompe.git@main",
-    "geodarn @ git+https://github.com/billetd/geodarn.git@main",
-    "pydarnio @ git+https://github.com/billetd/pyDARNio@borealis_v0.7",
-    "pydarn @ git+https://github.com/SuperDARN/pydarn.git@develop",
 ]
 extras = [
 ]
