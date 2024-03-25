@@ -8,7 +8,7 @@ import os
 import datetime as dt
 import numpy as np
 import math
-from utils import find_indexes_within_time_range
+from FBI.utils import find_indexes_within_time_range
 
 
 def read_fitacfs(fitacf_files, cores=1):
