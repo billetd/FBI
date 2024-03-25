@@ -1,6 +1,8 @@
 import numpy as np
 import spaceweather as sw
 import math
+import datetime as dt
+import bisect
 
 
 def find_indexes_within_time_range(datetimes, target_time, catchtime=None, behind=None):
@@ -13,24 +15,16 @@ def find_indexes_within_time_range(datetimes, target_time, catchtime=None, behin
     :return:
     """
 
-    # Convert the list of datetime objects to NumPy array of timestamps
-    timestamps = np.array([time.timestamp() for time in datetimes])
-
-    # Convert the target time to a timestamp
-    target_timestamp = target_time.timestamp()
-
-    # Calculate the absolute differences between each timestamp and the target timestamp
-    time_differences = timestamps - target_timestamp
-
-    # Find the indexes where the time difference is within 1 second (default) (catch the whole scan)
     if catchtime is None:
         catchtime = 1
     if behind is True:
-        indexes_within_range = np.where(np.logical_and(-catchtime <= time_differences, time_differences <= 0))[0]
+        start_index = target_time - dt.timedelta(seconds=catchtime * 2)
+        end_index = target_time - dt.timedelta(seconds=catchtime * 2)
     else:
-        indexes_within_range = np.where(np.abs(time_differences) <= catchtime)[0]
+        start_index = bisect.bisect_right(datetimes, target_time - dt.timedelta(seconds=catchtime))
+        end_index = bisect.bisect_right(datetimes, target_time + dt.timedelta(seconds=catchtime))
 
-    return indexes_within_range.tolist()
+    return list(range(start_index, end_index))
 
 
 def get_kp_iterable(times):

@@ -8,6 +8,7 @@ import os
 import datetime as dt
 import numpy as np
 import math
+import pandas as pd
 from FBI.utils import find_indexes_within_time_range
 
 
@@ -86,9 +87,6 @@ def all_data_make_iterable(all_data, range_times, scan_delta):
             these_records = [all_data[file_index][record] for record in records_in_scan]
             if these_records:  # prevent occurences where no records are found creeping in
                 all_radars_this_scan.append(these_records)
-
-            if file_index == 3:
-                pass
 
         all_data_iterable.append(all_radars_this_scan)
 
