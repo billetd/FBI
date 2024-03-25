@@ -87,13 +87,10 @@ def dailies_between_dates():
         pass
 
 
-
-
-
 if __name__ == '__main__':
 
     # Supress the annoying Pandas warnings because append is depreciated
     warnings.simplefilter(action='ignore', category=FutureWarning)
 
-    # simple_process()
-    dailies_between_dates()
+    simple_process()
+    # dailies_between_dates()

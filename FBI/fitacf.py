@@ -62,20 +62,26 @@ def all_data_make_iterable(all_data, range_times, scan_delta):
     """
 
     all_data_iterable = []
+
+    # Get the times of all records for each radar
+    record_times = []
+    for file_index in range(len(all_data)):
+        rid_record_times = [dt.datetime(all_data[file_index][x]['time.yr'], all_data[file_index][x]['time.mo'],
+                                        all_data[file_index][x]['time.dy'], all_data[file_index][x]['time.hr'],
+                                        all_data[file_index][x]['time.mt'], all_data[file_index][x]['time.sc'],
+                                        all_data[file_index][x]['time.us'])
+                            for x in range(0, len(all_data[file_index]))]
+        record_times.append(rid_record_times)
+
     for counter, scan_time in enumerate(range_times):
 
-        print('Found scan' + str(counter) + ' of ' + str(len(range_times)))
+        print('Found scan ' + str(counter) + ' of ' + str(len(range_times)))
         all_radars_this_scan = []
         for file_index in range(len(all_data)):
 
             # Get the indexes for the records which are within scan_delta of scan_time
             # scan_delta multiplied by three to account for median filtering later (needs scan before and after)
-            record_times = [dt.datetime(all_data[file_index][x]['time.yr'], all_data[file_index][x]['time.mo'],
-                                        all_data[file_index][x]['time.dy'], all_data[file_index][x]['time.hr'],
-                                        all_data[file_index][x]['time.mt'], all_data[file_index][x]['time.sc'],
-                                        all_data[file_index][x]['time.us'])
-                            for x in range(0, len(all_data[file_index]))]
-            records_in_scan = find_indexes_within_time_range(record_times, scan_time,
+            records_in_scan = find_indexes_within_time_range(record_times[file_index], scan_time,
                                                              catchtime=((scan_delta * 3) / 2))  # protect median filter
             these_records = [all_data[file_index][record] for record in records_in_scan]
             if these_records:  # prevent occurences where no records are found creeping in
