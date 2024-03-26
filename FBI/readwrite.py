@@ -103,10 +103,6 @@ def fbi_save_hdf5(lompes, timerange, lompe_dir):
     :return:
     """
 
-    # TODO: Records don't appear to be in time order. Think is is because of using ray, or actually,
-    # maybe because it's doing it in integer order (e.g. 12, 22, etc)
-    # If plotting everything it all comes out eventually, but probably should be fixed
-
     # Dump data to hdf5 file
     print('Writing to file...')
     hdf5name = 'FBI_' + timerange[0].strftime("%Y%m%d%H%M%S") + '_' + timerange[1].strftime("%Y%m%d%H%M%S") + ".hdf5"

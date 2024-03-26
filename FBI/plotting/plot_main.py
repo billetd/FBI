@@ -22,7 +22,7 @@ def lompe_scan_plot_vectors(path, lompe):
     apex = apexpy.Apex(scan_time, refh=300)
 
     # Local axis over Canada
-    ax, ot, coord, fig = get_local_axis(scan_time)
+    ax, ot, coord, fig = get_local_axis(scan_time, apex)
     plt.title(scan_time.strftime("%Y-%m-%d %H:%M:%S"))
 
     # Line indicating the MLT noon direction
