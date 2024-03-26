@@ -87,12 +87,12 @@ def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff):
     # Get the data in a format that Lompe likes
     sd_data = prepare_lompe_inputs(apex, all_data, scan_time, scan_delta)
 
-    if sd_data is not None:
+    if sd_data is not None:  # Make sure there's data before continuing
         # Run lompe
         scan_lompe = run_lompe_model(scan_time, sd_data, kp)
 
         # Collect the model data to save
-        if scan_lompe is not None:
+        if scan_lompe is not None:  # I had the run break on inversion randomly once. Not sure why.
             lompe_data = lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff)
 
             # Clean up
@@ -277,9 +277,10 @@ def run_lompe_model(time, sd_data, kp):
     # Run inversion
     try:
         model.run_inversion(l1=10, l2=0.1, lapack_driver='gelsy')
+        # gtg, ltl = model.run_inversion(l1=10, l2=0)
     except TypeError:
+        # I had the run break on inversion randomly once. Not sure why.
         model = None
-    #gtg, ltl = model.run_inversion(l1=10, l2=0)
     del canada_grid
 
     return model
