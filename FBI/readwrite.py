@@ -112,58 +112,57 @@ def fbi_save_hdf5(lompes, timerange, lompe_dir):
     hdf5name = 'FBI_' + timerange[0].strftime("%Y%m%d%H%M%S") + '_' + timerange[1].strftime("%Y%m%d%H%M%S") + ".hdf5"
     with h5py.File(lompe_dir + hdf5name, "w") as f:
         for counter, lompe in enumerate(lompes):
-            grp = f.create_group(str(counter))
-            grp.create_dataset("v_e_model", shape=(len(lompe['v_e_model'])), data=lompe['v_e_model'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("v_n_model", shape=(len(lompe['v_n_model'])), data=lompe['v_n_model'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("mlats_model", shape=(len(lompe['mlats_model'])), data=lompe['mlats_model'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("mlons_model", shape=(len(lompe['mlons_model'])), data=lompe['mlons_model'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+            if lompe is not None:
+                grp = f.create_group(str(counter))
+                grp.create_dataset("v_e_model", shape=(len(lompe['v_e_model'])), data=lompe['v_e_model'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("v_n_model", shape=(len(lompe['v_n_model'])), data=lompe['v_n_model'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("mlats_model", shape=(len(lompe['mlats_model'])), data=lompe['mlats_model'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("mlons_model", shape=(len(lompe['mlons_model'])), data=lompe['mlons_model'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
 
-            grp.create_dataset("v_e_los", shape=(len(lompe['v_e_los'])), data=lompe['v_e_los'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("v_n_los", shape=(len(lompe['v_n_los'])), data=lompe['v_n_los'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("mlats_los", shape=(len(lompe['mlats_los'])), data=lompe['mlats_los'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("mlons_los", shape=(len(lompe['mlons_los'])), data=lompe['mlons_los'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("v_e_los", shape=(len(lompe['v_e_los'])), data=lompe['v_e_los'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("v_n_los", shape=(len(lompe['v_n_los'])), data=lompe['v_n_los'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("mlats_los", shape=(len(lompe['mlats_los'])), data=lompe['mlats_los'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("mlons_los", shape=(len(lompe['mlons_los'])), data=lompe['mlons_los'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
 
-            grp.create_dataset("v_e_darngrid", shape=(len(lompe['v_e_darngrid'])), data=lompe['v_e_darngrid'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("v_n_darngrid", shape=(len(lompe['v_n_darngrid'])), data=lompe['v_n_darngrid'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("mlats_darngrid", shape=(len(lompe['mlats_darngrid'])), data=lompe['mlats_darngrid'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("mlons_darngrid", shape=(len(lompe['mlons_darngrid'])), data=lompe['mlons_darngrid'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("v_e_darngrid", shape=(len(lompe['v_e_darngrid'])), data=lompe['v_e_darngrid'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("v_n_darngrid", shape=(len(lompe['v_n_darngrid'])), data=lompe['v_n_darngrid'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("mlats_darngrid", shape=(len(lompe['mlats_darngrid'])), data=lompe['mlats_darngrid'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("mlons_darngrid", shape=(len(lompe['mlons_darngrid'])), data=lompe['mlons_darngrid'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
 
-            grp.create_dataset("e_pot_model", shape=(len(lompe['e_pot_model'])), data=lompe['e_pot_model'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("e_pot_model", shape=(len(lompe['e_pot_model'])), data=lompe['e_pot_model'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
 
-            grp.create_dataset("bound_mlats", shape=(len(lompe['bound_mlats'])), data=lompe['bound_mlats'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("bound_mlats", shape=(len(lompe['bound_mlats'])), data=lompe['bound_mlats'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
 
-            grp.create_dataset("scan_year", shape=1, data=lompe['scan_year'], compression="gzip",
-                               chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("scan_month", shape=1, data=lompe['scan_month'], compression="gzip",
-                               chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("scan_day", shape=1, data=lompe['scan_day'], compression="gzip",
-                               chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("scan_hour", shape=1, data=lompe['scan_hour'], compression="gzip",
-                               chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("scan_minute", shape=1, data=lompe['scan_minute'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("scan_second", shape=1, data=lompe['scan_second'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-            grp.create_dataset("scan_millisec", shape=1, data=lompe['scan_millisec'],
-                               compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("scan_year", shape=1, data=lompe['scan_year'], compression="gzip",
+                                   chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("scan_month", shape=1, data=lompe['scan_month'], compression="gzip",
+                                   chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("scan_day", shape=1, data=lompe['scan_day'], compression="gzip",
+                                   chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("scan_hour", shape=1, data=lompe['scan_hour'], compression="gzip",
+                                   chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("scan_minute", shape=1, data=lompe['scan_minute'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("scan_second", shape=1, data=lompe['scan_second'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                grp.create_dataset("scan_millisec", shape=1, data=lompe['scan_millisec'],
+                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
 
-    # print('Writing to file...')
-    # hdf5name = 'FBI_' + timerange[0].strftime("%Y%m%d%H%M%S") + '_' + timerange[1].strftime("%Y%m%d%H%M%S") + ".hdf5"
-    # hickle.dump(lompes, lompe_dir + hdf5name, compression="lzf", mode='w', shuffle=True)
+        pass
 
 
 def fbi_load_hdf5(file):

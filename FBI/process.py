@@ -87,18 +87,19 @@ def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff):
     # Get the data in a format that Lompe likes
     sd_data = prepare_lompe_inputs(apex, all_data, scan_time, scan_delta)
 
-    # Run lompe
-    scan_lompe = run_lompe_model(scan_time, sd_data, kp)
+    if sd_data is not None:
+        # Run lompe
+        scan_lompe = run_lompe_model(scan_time, sd_data, kp)
 
-    # Collect the model data to save
-    lompe_data = lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff)
+        # Collect the model data to save
+        lompe_data = lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff)
 
-    # Clean up
-    del scan_lompe, sd_data, apex
-    gc.collect()
-    print('Scan complete: ' + scan_time.strftime("%Y-%m-%d %H:%M:%S.%f"))
+        # Clean up
+        del scan_lompe, sd_data, apex
+        gc.collect()
+        print('Scan complete: ' + scan_time.strftime("%Y-%m-%d %H:%M:%S.%f"))
 
-    return lompe_data
+        return lompe_data
 
 
 def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta):
@@ -120,8 +121,12 @@ def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta):
     los = np.vstack((le, ln))
     los_mag = np.vstack((le_mag, ln_mag))
 
-    sd_data = lompe.Data(vlos, coordinates=coords, LOS=los, LOS_mag=los_mag, datatype='convection', error=vlos_err,
-                         iweight=1.0)
+    try:
+        sd_data = lompe.Data(vlos, coordinates=coords, LOS=los, LOS_mag=los_mag, datatype='convection', error=vlos_err,
+                             iweight=1.0)
+    except AttributeError:
+        print('No data in this scan for some reason. Skipping...')
+        return None
 
     return sd_data
 

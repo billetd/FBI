@@ -4,7 +4,6 @@ Example code for processing input fitacf data into lompe outputs
 
 import datetime as dt
 import glob
-import warnings
 import FBI.fitacf as fitacf
 import FBI.process as process
 import gc
@@ -85,5 +84,5 @@ def dailies_between_dates():
         gc.collect()
 
 
-# simple_process()
-dailies_between_dates()
+simple_process()
+# dailies_between_dates()
