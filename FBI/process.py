@@ -54,7 +54,7 @@ def process(all_data, timerange, lompe_dir, cores=1, scandelta_override=None):
     print('Shrinking data...')
     all_data_iterable = all_data_make_iterable(all_data, range_times, scan_delta)
 
-    lompe_data = lompe_parallel(range_times[0], all_data_iterable[0], kps[0], scan_delta, darn_grid_stuff)
+    # lompe_data = lompe_parallel(range_times[0], all_data_iterable[0], kps[0], scan_delta, darn_grid_stuff)
 
     # Initialise workers for parallelisation (or not) and put in constants
     ray.init(num_cpus=cores)
@@ -70,7 +70,7 @@ def process(all_data, timerange, lompe_dir, cores=1, scandelta_override=None):
     fbi_save_hdf5(lompes, timerange, lompe_dir)
 
 
-# @ray.remote
+@ray.remote
 def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff):
     """
     Code to create a lompe fit for a given scan time. Designed to be paraellelised with ray.
