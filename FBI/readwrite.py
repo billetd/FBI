@@ -162,8 +162,6 @@ def fbi_save_hdf5(lompes, timerange, lompe_dir):
                 grp.create_dataset("scan_millisec", shape=1, data=lompe['scan_millisec'],
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
 
-        pass
-
 
 def fbi_load_hdf5(file):
     """
@@ -174,7 +172,12 @@ def fbi_load_hdf5(file):
 
     with h5py.File(file, "r") as f:
         lompes = []
-        groups = list(f.keys())
+        groups_keys = list(f.keys())
+
+        # Fix the wonky hdf5 sorting
+        group_ints = [int(group) for group in groups_keys]
+        group_ints.sort()
+        groups = [str(group) for group in group_ints]
 
         # Iterate over records
         for group in groups:
