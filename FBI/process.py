@@ -54,7 +54,7 @@ def process(all_data, timerange, lompe_dir, cores=1, scandelta_override=None):
     print('Shrinking data...')
     all_data_iterable = all_data_make_iterable(all_data, range_times, scan_delta)
 
-    # lompe_data = lompe_parallel(range_times[0], all_data_iterable[0], kps[0], scan_delta, darn_grid_stuff)
+    lompe_data = lompe_parallel(range_times[0], all_data_iterable[0], kps[0], scan_delta, darn_grid_stuff)
 
     # Initialise workers for parallelisation (or not) and put in constants
     ray.init(num_cpus=cores)
@@ -70,7 +70,7 @@ def process(all_data, timerange, lompe_dir, cores=1, scandelta_override=None):
     fbi_save_hdf5(lompes, timerange, lompe_dir)
 
 
-@ray.remote
+# @ray.remote
 def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff):
     """
     Code to create a lompe fit for a given scan time. Designed to be paraellelised with ray.
@@ -92,14 +92,15 @@ def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff):
         scan_lompe = run_lompe_model(scan_time, sd_data, kp)
 
         # Collect the model data to save
-        lompe_data = lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff)
+        if scan_lompe is not None:
+            lompe_data = lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff)
 
-        # Clean up
-        del scan_lompe, sd_data, apex
-        gc.collect()
-        print('Scan complete: ' + scan_time.strftime("%Y-%m-%d %H:%M:%S.%f"))
+            # Clean up
+            del scan_lompe, sd_data, apex
+            gc.collect()
+            print('Scan complete: ' + scan_time.strftime("%Y-%m-%d %H:%M:%S.%f"))
 
-        return lompe_data
+            return lompe_data
 
 
 def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta):
@@ -274,7 +275,10 @@ def run_lompe_model(time, sd_data, kp):
     model.add_data(sd_data)
 
     # Run inversion
-    model.run_inversion(l1=10, l2=0.1, lapack_driver='gelsy')
+    try:
+        model.run_inversion(l1=10, l2=0.1, lapack_driver='gelsy')
+    except TypeError:
+        model = None
     #gtg, ltl = model.run_inversion(l1=10, l2=0)
     del canada_grid
 
