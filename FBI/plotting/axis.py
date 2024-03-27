@@ -8,7 +8,7 @@ from pydarn.plotting.projections import convert_geo_coastline_to_mag
 from shapely.geometry import MultiLineString
 
 
-def get_local_axis(time, apex):
+def get_local_axis(apex):
     """
 
     :return:

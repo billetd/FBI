@@ -1,23 +1,35 @@
 from FBI.plotting.plot_main import lompe_scan_plot_vectors
 from FBI.readwrite import fbi_load_hdf5
+import gc
+import glob
+import re
+import os
 
 
 if __name__ == '__main__':
 
     # Where the plots will be saved
-    save_dir = '/Users/danielbillett/Data/lompe/lompe_test/fitacfs/20231217/'
+    fbi_dir = '/Users/danielbillett/Data/lompe/2024_widebeam_h5s/'
 
-    # Read in an FBI hdf5 file
-    fbi_data = fbi_load_hdf5(save_dir + 'FBI_20231217001000_20231217010000_widebeam.hdf5')
+    # List of files to iterate over
+    fbi_files = glob.glob(fbi_dir + "FBI_*.hdf5")
 
-    # # Where the plots will be saved
-    # save_dir = '/Users/danielbillett/Data/lompe/2024_widebeam_h5s/20240106/'
-    #
-    # # Read in an FBI hdf5 file
-    # fbi_data = fbi_load_hdf5('/Users/danielbillett/Data/lompe/2024_widebeam_h5s/FBI_20240106000000_20240107000000.hdf5')
+    for fbi_file in fbi_files:
 
-    # Iterate over the records in the file and plot
-    for counter, record in enumerate(fbi_data):
-        lompe_scan_plot_vectors(save_dir, record)
-        print(counter)
+        # Make a directory to hold the images, if one already doesn't exist
+        dirname = fbi_dir + re.search('FBI_(.+?)_', fbi_file).group(1) + '/'
+        if not os.path.isdir(dirname):
+            os.mkdir(dirname)
+
+        # Read in an FBI hdf5 file
+        print('Reading: ' + fbi_file)
+        fbi_data = fbi_load_hdf5(fbi_file)
+
+        # Iterate over the records in the file and plot
+        for counter, record in enumerate(fbi_data):
+            lompe_scan_plot_vectors(dirname, record)
+            print(fbi_file, counter)
+
+        del fbi_data
+        gc.collect()
 
