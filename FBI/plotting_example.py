@@ -13,8 +13,10 @@ if __name__ == '__main__':
 
     # List of files to iterate over
     fbi_files = glob.glob(fbi_dir + "FBI_*.hdf5")
+    fbi_file = fbi_files[2]
 
-    for fbi_file in fbi_files:
+    # for fbi_file in fbi_files:
+    if fbi_file:
 
         # Make a directory to hold the images, if one already doesn't exist
         dirname = fbi_dir + re.search('FBI_(.+?)_', fbi_file).group(1) + '/'
@@ -25,8 +27,11 @@ if __name__ == '__main__':
         print('Reading: ' + fbi_file)
         fbi_data = fbi_load_hdf5(fbi_file)
 
+        lompe_scan_plot_vectors(dirname, fbi_data[77])
+
         # Iterate over the records in the file and plot
         for counter, record in enumerate(fbi_data):
+
             lompe_scan_plot_vectors(dirname, record)
             print(fbi_file, counter)
 
