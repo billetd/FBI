@@ -221,7 +221,7 @@ def median_filter(fitacf_data, record, max_beams, gate):
                     # Have to check again if there is actually any data
                     try:
                         current_beam_slist = fitacf_data[scan + beam_diff]['slist']
-                    except KeyError:
+                    except (KeyError, IndexError) as err:
                         continue
                     current_beam_gscat = fitacf_data[scan + beam_diff]['gflg']
 

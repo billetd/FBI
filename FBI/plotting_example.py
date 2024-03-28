@@ -12,8 +12,8 @@ if __name__ == '__main__':
     fbi_dir = '/Users/danielbillett/Data/lompe/2024_widebeam_h5s/'
 
     # List of files to iterate over
-    fbi_files = glob.glob(fbi_dir + "FBI_*.hdf5")
-    fbi_file = fbi_files[2]
+    # fbi_files = glob.glob(fbi_dir + "FBI_*.hdf5")
+    fbi_file = fbi_dir + 'FBI_20240111000000_20240112000000.hdf5'
 
     # for fbi_file in fbi_files:
     if fbi_file:
@@ -27,13 +27,12 @@ if __name__ == '__main__':
         print('Reading: ' + fbi_file)
         fbi_data = fbi_load_hdf5(fbi_file)
 
-        lompe_scan_plot_vectors(dirname, fbi_data[77])
-
         # Iterate over the records in the file and plot
-        for counter, record in enumerate(fbi_data):
+        # for counter, record in enumerate(fbi_data):
+        for rec in range(7032, 7035):
 
-            lompe_scan_plot_vectors(dirname, record)
-            print(fbi_file, counter)
+            lompe_scan_plot_vectors(dirname, fbi_data[rec])
+            print(fbi_file, rec)
 
         del fbi_data
         gc.collect()
