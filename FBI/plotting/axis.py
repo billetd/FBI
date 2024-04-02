@@ -4,7 +4,6 @@ import matplotlib.ticker as mticker
 import numpy as np
 import matplotlib.path as mpltPath
 from matplotlib import pyplot as plt
-from pydarn.plotting.projections import convert_geo_coastline_to_mag
 from shapely.geometry import MultiLineString
 
 

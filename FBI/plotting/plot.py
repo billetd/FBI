@@ -23,12 +23,12 @@ def plot_noon_line(apex, time, coord='mlt'):
         print('Warning in plot_noon_line: coord can only be \'mag\'')
 
 
-def plot_vecs_model_darn_grid(lompe, ax, mlon=None):
+def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
     """
 
     :param lompe:
     :param ax:
-    :param mlon:
+    :param coord:
     :return:
     """
 
@@ -68,7 +68,7 @@ def plot_vecs_model_darn_grid(lompe, ax, mlon=None):
     magn_src_crs = np.sqrt(u_src_crs ** 2 + v_src_crs ** 2)
 
     colours_norm = Normalize(vmin=0, vmax=1000)
-    if mlon is True:
+    if coord == 'mag':
 
         # Plot all the vectors at grid points normally
         quiv_thin = ax.quiver(mlons, mlats, u_src_crs * magnitude / magn_src_crs, v_src_crs * magnitude / magn_src_crs,
@@ -111,3 +111,46 @@ def plot_vecs_model_darn_grid(lompe, ax, mlon=None):
     cb.set_label(r'Ionospheric Drift Velocity [ms$^{-1}$]')
 
     return quiv_thin, quiv_thick
+
+
+def plot_potential_contours(lompe, ot, apex, time, coord='mag'):
+
+    V = np.array(lompe['e_pot_model'])/1000
+    pot_mlat = np.array(lompe['mlats_model'])
+    pot_mlon = np.array(lompe['mlons_model'])
+    pot_mlt = (apex.mlon2mlt(np.array(pot_mlon), time))*15
+
+    # Work out min and max potential values to contour based on min and max in V array, rounded up to nearest 10
+    vmax = 100
+    pot_zmin = -vmax
+    pot_zmax = vmax
+    contour_spacing = int(np.floor(np.max([abs(pot_zmin), abs(pot_zmax)]) / 10))
+
+    # Making the levels required, but skipping 0 as default to avoid a contour at 0 position (looks weird)
+    contour_levels = [*range(pot_zmin, 0, contour_spacing), *range(contour_spacing,
+                                                                   pot_zmax + contour_spacing, contour_spacing)]
+
+    if coord == 'mag':
+        # Convert to xy
+        x, y, z = ot.transform_points(ccrs.PlateCarree(), pot_mlon, pot_mlat).T
+
+        x_new = x[~np.isnan(x)]
+        y_new = y[~np.isnan(x)]
+        V_new = V[~np.isnan(x)]
+
+        cs = plt.tricontourf(x_new, y_new, V_new.T, levels=contour_levels, zorder=2, cmap='RdBu',
+                             vmax=pot_zmax, vmin=pot_zmin, extend='both', alpha=0.5)
+
+
+def plot_data_locs(lompe, ax, apex=None, time=None, coord='mag'):
+
+    # Get coordinates
+    data_mlats = lompe['mlats_los']
+    data_mlons = lompe['mlons_los']
+
+    if coord == 'mag':
+        ax.scatter(data_mlons, data_mlats, s=1, color='k', zorder=2, alpha=1,
+                   transform=ccrs.PlateCarree(), marker='x')
+    elif coord == 'mlt':
+        data_mlts = apex.mlon2mlt(data_mlons, time)
+        ax.scatter(data_mlats, data_mlts, s=0.4, linewidth=0, color='black', zorder=1)

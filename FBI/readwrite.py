@@ -1,5 +1,6 @@
 import numpy as np
 import h5py
+import datetime as dt
 
 
 def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff):
@@ -115,18 +116,18 @@ def fbi_save_hdf5(lompes, timerange, lompe_dir):
                 grp.create_dataset("v_n_model", shape=(len(lompe['v_n_model'])), data=lompe['v_n_model'],
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
                 grp.create_dataset("mlats_model", shape=(len(lompe['mlats_model'])), data=lompe['mlats_model'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                                   compression="gzip")
                 grp.create_dataset("mlons_model", shape=(len(lompe['mlons_model'])), data=lompe['mlons_model'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                                   compression="gzip")
 
                 grp.create_dataset("v_e_los", shape=(len(lompe['v_e_los'])), data=lompe['v_e_los'],
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
                 grp.create_dataset("v_n_los", shape=(len(lompe['v_n_los'])), data=lompe['v_n_los'],
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
                 grp.create_dataset("mlats_los", shape=(len(lompe['mlats_los'])), data=lompe['mlats_los'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                                   compression="gzip")
                 grp.create_dataset("mlons_los", shape=(len(lompe['mlons_los'])), data=lompe['mlons_los'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                                   compression="gzip")
 
                 grp.create_dataset("v_e_darngrid", shape=(len(lompe['v_e_darngrid'])), data=lompe['v_e_darngrid'],
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
@@ -141,7 +142,9 @@ def fbi_save_hdf5(lompes, timerange, lompe_dir):
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
 
                 grp.create_dataset("bound_mlats", shape=(len(lompe['bound_mlats'])), data=lompe['bound_mlats'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                                   compression="gzip")
+                grp.create_dataset("bound_mlons", shape=(len(lompe['bound_mlons'])), data=lompe['bound_mlons'],
+                                   compression="gzip")
 
                 grp.create_dataset("scan_year", shape=1, data=lompe['scan_year'], compression="gzip",
                                    chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
@@ -159,10 +162,12 @@ def fbi_save_hdf5(lompes, timerange, lompe_dir):
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
 
 
-def fbi_load_hdf5(file):
+def fbi_load_hdf5(file, timerange=None):
     """
     Load the data saved by fbi_save_hdf5()
+    Use timerange as a datetime tuple to only read in between two times
     :param file:
+    :param timerange:
     :return:
     """
 
@@ -179,8 +184,20 @@ def fbi_load_hdf5(file):
         for group in groups:
 
             datasets = f[group].keys()
-            this_record = {}
 
+            # Check if it's within the timerange, if using
+            if timerange:
+                this_time = dt.datetime(f[group + '/' + 'scan_year'][0],
+                                        f[group + '/' + 'scan_month'][0],
+                                        f[group + '/' + 'scan_day'][0],
+                                        f[group + '/' + 'scan_hour'][0],
+                                        f[group + '/' + 'scan_minute'][0])
+                if timerange[0] <= this_time < timerange[1]:
+                    pass
+                else:
+                    continue
+
+            this_record = {}
             # Iterate over keys
             for dataset in datasets:
 
@@ -190,4 +207,6 @@ def fbi_load_hdf5(file):
             lompes.append(this_record)
 
     return lompes
+
+
 

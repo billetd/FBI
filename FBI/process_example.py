@@ -14,7 +14,7 @@ def simple_process():
     # Locations of files to read
     # Make sure the list of files are only the ones you need, not all your SuperDARN data,
     # otherwise it will read in everything
-    fitacf_dir = '/Users/danielbillett/Data/lompe/lompe_test/fitacfs/20231217/dumbscan/'
+    fitacf_dir = '/Users/danielbillett/Data/lompe/lompe_test/fitacfs/20231217/imaging/'
     fitacf_files = glob.glob(fitacf_dir+'/*.fitacf')
 
     # Where to save the lompe outputs
@@ -29,7 +29,7 @@ def simple_process():
     all_data = fitacf.read_fitacfs(fitacf_files, cores=5)
 
     # Go and do the rest of the processing
-    process.process(all_data, [start_time, end_time], lompe_dir, cores=6, scandelta_override=240)
+    process.process(all_data, [start_time, end_time], lompe_dir, cores=6, scandelta_override=6)
 
 
 def dailies_between_dates():
