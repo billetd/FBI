@@ -4,6 +4,7 @@ import matplotlib.ticker as mticker
 import numpy as np
 import matplotlib.path as mpltPath
 from matplotlib import pyplot as plt
+from polplot import Polarplot
 from shapely.geometry import MultiLineString
 
 
@@ -54,3 +55,21 @@ def get_local_axis(apex):
             plt.plot(x_coast, y_coast, zorder=0, color='grey', linewidth=0.5, alpha=0.6)
 
     return ax, ot, 'mag', fig
+
+
+def get_polar_axis(time, apex):
+
+    fig = plt.figure()
+    rect = [0.1, 0.1, 0.8, 0.8]
+    ax = fig.add_axes(rect)
+
+    pax = Polarplot(ax, minlat=50, linewidth=0.7)
+    pax.coastlines(time=time, mag=apex, linewidth=0.5, resolution='50m', color='grey', alpha=0.5)
+
+    lowlat_mlts = np.linspace(0, 24, num=360)
+    lowlat_lats = np.zeros(360) + 50
+
+    # I don't like the dashed line at the low lat boundary, so I'll just draw a solid one
+    pax.plot(lowlat_lats, lowlat_mlts, color='black')
+
+    return pax, 'mlt'

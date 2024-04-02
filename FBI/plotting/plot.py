@@ -118,7 +118,6 @@ def plot_potential_contours(lompe, ot, apex, time, coord='mag'):
     V = np.array(lompe['e_pot_model'])/1000
     pot_mlat = np.array(lompe['mlats_model'])
     pot_mlon = np.array(lompe['mlons_model'])
-    pot_mlt = (apex.mlon2mlt(np.array(pot_mlon), time))*15
 
     # Work out min and max potential values to contour based on min and max in V array, rounded up to nearest 10
     vmax = 100
@@ -140,6 +139,16 @@ def plot_potential_contours(lompe, ot, apex, time, coord='mag'):
 
         cs = plt.tricontourf(x_new, y_new, V_new.T, levels=contour_levels, zorder=2, cmap='RdBu',
                              vmax=pot_zmax, vmin=pot_zmin, extend='both', alpha=0.5)
+    if coord == 'mlt':
+        pot_mlt = (apex.mlon2mlt(np.array(pot_mlon), time)) * 15
+        cs = ot.contourf(pot_mlat, pot_mlt / 15, V, levels=contour_levels, zorder=2, cmap='RdBu',
+                         vmax=pot_zmax, vmin=pot_zmin, extend='both', alpha=0.5)
+
+    # Colour bar
+    locator = ticker.MaxNLocator(symmetric=True, min_n_ticks=3, integer=True, nbins='auto')
+    ticks = locator.tick_values(vmin=pot_zmin, vmax=pot_zmax)
+    cb = plt.colorbar(cs, extend='both', ticks=ticks)
+    cb.set_label('Electric Potential [kV]')
 
 
 def plot_data_locs(lompe, ax, apex=None, time=None, coord='mag'):
@@ -149,8 +158,17 @@ def plot_data_locs(lompe, ax, apex=None, time=None, coord='mag'):
     data_mlons = lompe['mlons_los']
 
     if coord == 'mag':
-        ax.scatter(data_mlons, data_mlats, s=1, color='k', zorder=2, alpha=1,
+        ax.scatter(data_mlons, data_mlats, s=0.4, color='k', zorder=1,
                    transform=ccrs.PlateCarree(), marker='x')
     elif coord == 'mlt':
         data_mlts = apex.mlon2mlt(data_mlons, time)
         ax.scatter(data_mlats, data_mlts, s=0.4, linewidth=0, color='black', zorder=1)
+
+
+def plot_boundary_box(lompe, ax, apex, time):
+
+    # Get the coordinates of the boundary of the fit
+    bound_mlts = apex.mlon2mlt(lompe['bound_mlons'], time)
+
+    # Plot
+    ax.plot(lompe['bound_mlats'], bound_mlts, color='black', linewidth=1, zorder=3)

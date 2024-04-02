@@ -1,4 +1,4 @@
-from FBI.plotting.plot_main import lompe_scan_plot_vectors, lompe_scan_plot_potential
+from FBI.plotting.plot_main import lompe_scan_plot_vectors, lompe_scan_plot_potential, lompe_scan_plot_potential_polar
 from FBI.readwrite import fbi_load_hdf5
 import gc
 import glob
@@ -14,9 +14,9 @@ if __name__ == '__main__':
 
     # List of files to iterate over
     # fbi_files = glob.glob(fbi_dir + "FBI_*.hdf5")
-    fbi_file = fbi_dir + 'FBI_20231217001000_20231217001100.hdf5'
+    fbi_file = fbi_dir + 'FBI_20231217001000_20231217010000.hdf5'
     timerange = [dt.datetime(2023, 12, 17, 0, 10),
-                 dt.datetime(2023, 12, 17, 0, 11)]
+                 dt.datetime(2023, 12, 17, 1, 0)]
 
     # for fbi_file in fbi_files:
     if fbi_file:
@@ -35,6 +35,7 @@ if __name__ == '__main__':
         # for rec in range(7032, 7040):
 
             lompe_scan_plot_vectors(dirname, record)
+            lompe_scan_plot_potential_polar(dirname, record)
             lompe_scan_plot_potential(dirname, record)
             print(dt.datetime(record['scan_year'][0],
                               record['scan_month'][0],
