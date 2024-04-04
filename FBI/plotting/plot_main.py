@@ -7,7 +7,7 @@ from FBI.plotting.plot import plot_noon_line, plot_vecs_model_darn_grid, plot_po
     plot_boundary_box
 
 
-def lompe_scan_plot_vectors(path, lompe, save=True):
+def lompe_scan_plot_vectors(lompe, path, save=True):
     """
 
     :param path:
@@ -20,10 +20,17 @@ def lompe_scan_plot_vectors(path, lompe, save=True):
 
     scan_time = dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
                             lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
-    save_path = path + scan_time.strftime("vecs_%Y-%m-%d %H%M%S") + '.png'
 
-    # Check plot doesn't already exist
-    if pathy.isfile(save_path) is False:
+    if path is not None:
+        save_path = path + scan_time.strftime("vecs_%Y-%m-%d %H%M%S") + '.png'
+        if pathy.isfile(save_path) is False:  # Check plot doesn't already exist
+            go = True
+        else:
+            go = False
+    else:
+        go = True
+
+    if go is True:
         # Apex coordinate stuff
         apex = apexpy.Apex(scan_time, refh=300)
 
@@ -47,7 +54,7 @@ def lompe_scan_plot_vectors(path, lompe, save=True):
         print('Allready processed: ' + save_path)
 
 
-def lompe_scan_plot_potential(path, lompe, save=True):
+def lompe_scan_plot_potential(lompe, path, save=True):
     """
 
     :param path:
@@ -60,10 +67,16 @@ def lompe_scan_plot_potential(path, lompe, save=True):
 
     scan_time = dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
                             lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
-    save_path = path + scan_time.strftime("pot_%Y-%m-%d %H%M%S") + '.png'
+    if path is not None:
+        save_path = path + scan_time.strftime("pot_%Y-%m-%d %H%M%S") + '.png'
+        if pathy.isfile(save_path) is False:  # Check plot doesn't already exist
+            go = True
+        else:
+            go = False
+    else:
+        go = True
 
-    # Check plot doesn't already exist
-    if pathy.isfile(save_path) is False:
+    if go is True:
         # Apex coordinate stuff
         apex = apexpy.Apex(scan_time, refh=300)
 
@@ -90,7 +103,7 @@ def lompe_scan_plot_potential(path, lompe, save=True):
         print('Allready processed: ' + save_path)
 
 
-def lompe_scan_plot_potential_polar(path, lompe, save=True):
+def lompe_scan_plot_potential_polar(lompe, path, save=True):
     """
 
     :param path:
@@ -103,10 +116,17 @@ def lompe_scan_plot_potential_polar(path, lompe, save=True):
 
     scan_time = dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
                             lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
-    save_path = path + scan_time.strftime("polar_pot_%Y-%m-%d %H%M%S") + '.png'
 
-    # Check plot doesn't already exist
-    if pathy.isfile(save_path) is False:
+    if path is not None:
+        save_path = path + scan_time.strftime("polar_pot_%Y-%m-%d %H%M%S") + '.png'
+        if pathy.isfile(save_path) is False:  # Check plot doesn't already exist
+            go = True
+        else:
+            go = False
+    else:
+        go = True
+
+    if go is True:
         # Apex coordinate stuff
         apex = apexpy.Apex(scan_time, refh=300)
 
