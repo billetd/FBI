@@ -10,13 +10,13 @@ import datetime as dt
 if __name__ == '__main__':
 
     # Where the plots will be saved
-    fbi_dir = '/Users/danielbillett/Data/lompe/lompe_test/fitacfs/20231217/'
+    fbi_dir = '/Users/danielbillett/Data/lompe/lompe_test/fitacfs/20240116/'
 
     # List of files to iterate over
     # fbi_files = glob.glob(fbi_dir + "FBI_*.hdf5")
-    fbi_file = fbi_dir + 'FBI_20231217001000_20231217010000.hdf5'
-    timerange = [dt.datetime(2023, 12, 17, 0, 10),
-                 dt.datetime(2023, 12, 17, 1, 0)]
+    fbi_file = fbi_dir + 'FBI_20240116044000_20240116052000.hdf5'
+    timerange = [dt.datetime(2024, 1, 16, 4, 40),
+                 dt.datetime(2024, 1, 16, 5, 20)]
 
     # for fbi_file in fbi_files:
     if fbi_file:

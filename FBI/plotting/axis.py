@@ -72,4 +72,4 @@ def get_polar_axis(time, apex):
     # I don't like the dashed line at the low lat boundary, so I'll just draw a solid one
     pax.plot(lowlat_lats, lowlat_mlts, color='black')
 
-    return pax, 'mlt'
+    return pax, 'mlt', fig

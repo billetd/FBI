@@ -7,11 +7,12 @@ from FBI.plotting.plot import plot_noon_line, plot_vecs_model_darn_grid, plot_po
     plot_boundary_box
 
 
-def lompe_scan_plot_vectors(path, lompe):
+def lompe_scan_plot_vectors(path, lompe, save=True):
     """
 
     :param path:
     :param lompe:
+    :param save:
     :return:
     """
 
@@ -36,17 +37,22 @@ def lompe_scan_plot_vectors(path, lompe):
         # Oplot model velocity vectors at grid locations
         plot_vecs_model_darn_grid(lompe, ax, coord=coord)
 
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.close('all')
+        if save is True:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close('all')
+            return None, None, None, None
+        else:
+            return fig, ax, ot, plt
     else:
         print('Allready processed: ' + save_path)
 
 
-def lompe_scan_plot_potential(path, lompe):
+def lompe_scan_plot_potential(path, lompe, save=True):
     """
 
     :param path:
     :param lompe:
+    :param save:
     :return:
     """
 
@@ -74,17 +80,22 @@ def lompe_scan_plot_potential(path, lompe):
         # Locations of SuperDARN data
         plot_data_locs(lompe, ax, apex=None, time=None, coord=coord)
 
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.close('all')
+        if save is True:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close('all')
+            return None, None, None, None
+        else:
+            return fig, ax, ot, plt
     else:
         print('Allready processed: ' + save_path)
 
 
-def lompe_scan_plot_potential_polar(path, lompe):
+def lompe_scan_plot_potential_polar(path, lompe, save=True):
     """
 
     :param path:
     :param lompe:
+    :param save:
     :return:
     """
 
@@ -100,7 +111,7 @@ def lompe_scan_plot_potential_polar(path, lompe):
         apex = apexpy.Apex(scan_time, refh=300)
 
         # Global polar axis
-        ax, coord = get_polar_axis(scan_time, apex)
+        ax, coord, fig = get_polar_axis(scan_time, apex)
         plt.title(scan_time.strftime("%Y-%m-%d %H:%M:%S"))
 
         # Electric potentials
@@ -112,7 +123,11 @@ def lompe_scan_plot_potential_polar(path, lompe):
         # Boundary box
         plot_boundary_box(lompe, ax, apex, scan_time)
 
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.close('all')
+        if save is True:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close('all')
+            return None, None, None, None
+        else:
+            return fig, ax, None, plt
     else:
         print('Allready processed: ' + save_path)

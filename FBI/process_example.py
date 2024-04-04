@@ -14,16 +14,16 @@ def simple_process():
     # Locations of files to read
     # Make sure the list of files are only the ones you need, not all your SuperDARN data,
     # otherwise it will read in everything
-    fitacf_dir = '/Users/danielbillett/Data/lompe/lompe_test/fitacfs/20231217/imaging/'
+    fitacf_dir = '/Users/danielbillett/Data/lompe/lompe_test/fitacfs/20240116/imaging/'
     fitacf_files = glob.glob(fitacf_dir+'/*.fitacf')
 
     # Where to save the lompe outputs
-    lompe_dir = '/Users/danielbillett/Data/lompe/lompe_test/fitacfs/20231217/'
+    lompe_dir = '/Users/danielbillett/Data/lompe/lompe_test/fitacfs/20240116/'
 
     # Times to process between
     # Make sure these times are actually in the fitacfs you have
-    start_time = dt.datetime(2023, 12, 17, 0, 10)
-    end_time = dt.datetime(2023, 12, 17, 1, 0)
+    start_time = dt.datetime(2024, 1, 16, 4, 40)
+    end_time = dt.datetime(2024, 1, 16, 5, 20)
 
     # Read in 5 at a time (change based on your computers core capacity)
     all_data = fitacf.read_fitacfs(fitacf_files, cores=5)
