@@ -23,6 +23,7 @@ def get_local_axis(apex):
     pos_higher = [64, 71]
     xs, ys, zs = ot.transform_points(ccrs.PlateCarree(), np.array((pos_lower[0], pos_lower[1])),
                                      np.array((pos_higher[0], pos_higher[1]))).T
+
     # For checking if plots are in the plot window later
     path = mpltPath.Path([[xs[0], ys[0]], [xs[0], ys[1]], [xs[1], ys[1]], [xs[1], ys[0]]])
 
@@ -42,7 +43,7 @@ def get_local_axis(apex):
                                       color='k', zorder=2.0)
 
     # Plot coastlines
-    for shape in list(cc.geometries()):
+    for buh, shape in enumerate(list(cc.geometries())):
         if isinstance(shape, MultiLineString):  # Don't plot multi geoms as it breaks
             continue
         glats = shape.coords.xy[1]
@@ -53,7 +54,6 @@ def get_local_axis(apex):
         if any(points):  # Check if any of the points to plot are actually in the plot window
             # plt.fill(x_coast, y_coast, zorder=0, color='grey')  # Doesn't work right atm. Weird shapes.
             plt.plot(x_coast, y_coast, zorder=0, color='grey', linewidth=0.5, alpha=0.6)
-
     return ax, ot, 'mag', fig
 
 

@@ -120,7 +120,7 @@ def plot_potential_contours(lompe, ot, apex, time, coord='mag'):
     pot_mlon = np.array(lompe['mlons_model'])
 
     # Work out min and max potential values to contour based on min and max in V array, rounded up to nearest 10
-    vmax = 100
+    vmax = 60
     pot_zmin = -vmax
     pot_zmax = vmax
     contour_spacing = int(np.floor(np.max([abs(pot_zmin), abs(pot_zmax)]) / 10))

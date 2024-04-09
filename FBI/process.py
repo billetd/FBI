@@ -19,13 +19,14 @@ os.environ['RAY_DEDUP_LOGS'] = '0'
 import ray
 
 
-def process(all_data, timerange, lompe_dir, cores=1, scandelta_override=None):
+def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_override=None):
     """
 
     :param all_data:
     :param timerange:
     :param lompe_dir:
     :param cores:
+    :param med_filter: True or False
     :param scandelta_override:
     """
 
@@ -60,7 +61,8 @@ def process(all_data, timerange, lompe_dir, cores=1, scandelta_override=None):
     ray.init(num_cpus=cores)
     scan_delta_id = ray.put(scan_delta)
     darn_grid_stuff_id = ray.put(darn_grid_stuff)
-    result_ids = [lompe_parallel.remote(scan_time, this_scan_data, kp, scan_delta_id, darn_grid_stuff_id)
+    med_filter_id = ray.put(med_filter)
+    result_ids = [lompe_parallel.remote(scan_time, this_scan_data, kp, scan_delta_id, darn_grid_stuff_id, med_filter_id)
                   for scan_time, this_scan_data, kp
                   in zip(range_times, all_data_iterable, kps)]
     lompes = ray.get(result_ids)
@@ -71,7 +73,7 @@ def process(all_data, timerange, lompe_dir, cores=1, scandelta_override=None):
 
 
 @ray.remote
-def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff):
+def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff, med_filter):
     """
     Code to create a lompe fit for a given scan time. Designed to be paraellelised with ray.
     :param scan_time:
@@ -79,13 +81,14 @@ def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff):
     :param kp:
     :param scan_delta:
     :param darn_grid_stuff:
+    :param med_filter:
     :return:
     """
 
     apex = apexpy.Apex(scan_time, refh=300)
 
     # Get the data in a format that Lompe likes
-    sd_data = prepare_lompe_inputs(apex, all_data, scan_time, scan_delta)
+    sd_data = prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter)
 
     if sd_data is not None:  # Make sure there's data before continuing
         # Run lompe
@@ -103,19 +106,20 @@ def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff):
             return lompe_data
 
 
-def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta):
+def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter):
     """
 
     :param apex:
     :param all_data:
     :param scan_time:
     :param scan_delta:
+    :param med_filter: True or false
     :return:
     """
 
     # Get data position/value arrays for Lompe
     glat, glon, mlat, mlon, le, ln, le_mag, ln_mag, vlos, vlos_err, rid, ve_mag, vn_mag = (
-        get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=True))
+        get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=med_filter))
 
     # Make the Lompe data object
     coords = np.vstack((glon, glat))
