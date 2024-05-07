@@ -65,6 +65,8 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     result_ids = [lompe_parallel.remote(scan_time, this_scan_data, kp, scan_delta_id, darn_grid_stuff_id, med_filter_id)
                   for scan_time, this_scan_data, kp
                   in zip(range_times, all_data_iterable, kps)]
+    # This commented bit does just one record - for debugging
+    # result = lompe_parallel(range_times[0], all_data_iterable[0], kps[0], scan_delta, darn_grid_stuff, med_filter)
     lompes = ray.get(result_ids)
     ray.shutdown()
 
@@ -88,7 +90,7 @@ def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff, med_fil
     apex = apexpy.Apex(scan_time, refh=300)
 
     # Get the data in a format that Lompe likes
-    sd_data = prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter)
+    sd_data, rids = prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter)
 
     if sd_data is not None:  # Make sure there's data before continuing
         # Run lompe
@@ -96,7 +98,7 @@ def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff, med_fil
 
         # Collect the model data to save
         if scan_lompe is not None:  # I had the run break on inversion randomly once. Not sure why.
-            lompe_data = lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff)
+            lompe_data = lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff, rids)
 
             # Clean up
             del scan_lompe, sd_data, apex
@@ -133,7 +135,7 @@ def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter):
         print('No data in this scan for some reason. Skipping...')
         return None
 
-    return sd_data
+    return sd_data, rid
 
 
 def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False):

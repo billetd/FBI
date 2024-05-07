@@ -18,7 +18,8 @@ def simple_process():
     fitacf_files = glob.glob(fitacf_dir+'/*.fitacf')
 
     # Where to save the lompe outputs
-    lompe_dir = '/Users/danielbillett/Data/lompe/lompe_test/fitacfs/20231217/'
+    # lompe_dir = '/Users/danielbillett/Data/lompe/lompe_test/fitacfs/20231217/'
+    lompe_dir = fitacf_dir + '/'
 
     # Times to process between
     # Make sure these times are actually in the fitacfs you have
@@ -29,8 +30,9 @@ def simple_process():
     all_data = fitacf.read_fitacfs(fitacf_files, cores=5)
 
     # Go and do the rest of the processing
-    process.process(all_data, [start_time, end_time], lompe_dir, cores=6, med_filter=False,
-                    scandelta_override=6)
+    process.process(all_data, [start_time, end_time], lompe_dir, cores=5, med_filter=True,
+                    scandelta_override=240)
+    # 7
 
 
 def dailies_between_dates():

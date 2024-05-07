@@ -16,7 +16,7 @@ def lompe_scan_plot_vectors(lompe, path, save=True):
     :return:
     """
 
-    # plt.rcParams['text.usetex'] = True
+    plt.rcParams['text.usetex'] = True
     scan_time = dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
                             lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
 

@@ -3,7 +3,7 @@ import h5py
 import datetime as dt
 
 
-def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff):
+def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff, rids):
     """
     Code to extract potentials and velocities at good points for later plotting
     These are the values saved to HDF5 later in fbi_write_hdf5()
@@ -11,6 +11,7 @@ def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff):
     :param apex:
     :param scan_time:
     :param darn_grid_stuff:
+    :param rids:
     :return:
     """
 
@@ -83,7 +84,7 @@ def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff):
 
     data = {'v_e_model': v_e_model.tolist(), 'v_n_model': v_n_model.tolist(),
             'mlats_model': mlats_model.tolist(), 'mlons_model': mlons_model.tolist(),
-            'v_e_los': v_e_los.tolist(), 'v_n_los': v_n_los.tolist(),
+            'v_e_los': v_e_los.tolist(), 'v_n_los': v_n_los.tolist(), 'rids': rids,
             'mlats_los': mlats_los.tolist(), 'mlons_los': mlons_los.tolist(),
             'v_e_darngrid': v_e_darngrid.tolist(), 'v_n_darngrid': v_n_darngrid.tolist(),
             'mlats_darngrid': mlats_darngrid.tolist(), 'mlons_darngrid': mlons_darngrid.tolist(),
@@ -111,6 +112,8 @@ def fbi_save_hdf5(lompes, timerange, lompe_dir):
         for counter, lompe in enumerate(lompes):
             if lompe is not None:
                 grp = f.create_group(str(counter))
+
+                # Fit vectors for the lompe grid
                 grp.create_dataset("v_e_model", shape=(len(lompe['v_e_model'])), data=lompe['v_e_model'],
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
                 grp.create_dataset("v_n_model", shape=(len(lompe['v_n_model'])), data=lompe['v_n_model'],
@@ -120,6 +123,7 @@ def fbi_save_hdf5(lompes, timerange, lompe_dir):
                 grp.create_dataset("mlons_model", shape=(len(lompe['mlons_model'])), data=lompe['mlons_model'],
                                    compression="gzip")
 
+                # Line-of-sight data going into the fit
                 grp.create_dataset("v_e_los", shape=(len(lompe['v_e_los'])), data=lompe['v_e_los'],
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
                 grp.create_dataset("v_n_los", shape=(len(lompe['v_n_los'])), data=lompe['v_n_los'],
@@ -128,7 +132,9 @@ def fbi_save_hdf5(lompes, timerange, lompe_dir):
                                    compression="gzip")
                 grp.create_dataset("mlons_los", shape=(len(lompe['mlons_los'])), data=lompe['mlons_los'],
                                    compression="gzip")
+                grp.create_dataset("rids", shape=(len(lompe['rids'])), data=lompe['rids'], compression="gzip")
 
+                # Fit vectors, at the locations of the SuperDARN equal area grid
                 grp.create_dataset("v_e_darngrid", shape=(len(lompe['v_e_darngrid'])), data=lompe['v_e_darngrid'],
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
                 grp.create_dataset("v_n_darngrid", shape=(len(lompe['v_n_darngrid'])), data=lompe['v_n_darngrid'],
@@ -138,14 +144,17 @@ def fbi_save_hdf5(lompes, timerange, lompe_dir):
                 grp.create_dataset("mlons_darngrid", shape=(len(lompe['mlons_darngrid'])), data=lompe['mlons_darngrid'],
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
 
+                # Electric potential on the Lompe grid
                 grp.create_dataset("e_pot_model", shape=(len(lompe['e_pot_model'])), data=lompe['e_pot_model'],
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
 
+                # Coordinates of the boundary of the fit
                 grp.create_dataset("bound_mlats", shape=(len(lompe['bound_mlats'])), data=lompe['bound_mlats'],
                                    compression="gzip")
                 grp.create_dataset("bound_mlons", shape=(len(lompe['bound_mlons'])), data=lompe['bound_mlons'],
                                    compression="gzip")
 
+                # Time info
                 grp.create_dataset("scan_year", shape=1, data=lompe['scan_year'], compression="gzip",
                                    chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
                 grp.create_dataset("scan_month", shape=1, data=lompe['scan_month'], compression="gzip",
@@ -170,6 +179,8 @@ def fbi_load_hdf5(file, timerange=None):
     :param timerange:
     :return:
     """
+
+    print('Reading: ' + file)
 
     with h5py.File(file, "r") as f:
         lompes = []
