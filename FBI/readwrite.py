@@ -140,9 +140,9 @@ def fbi_save_hdf5(lompes, timerange, lompe_dir):
                 grp.create_dataset("v_n_darngrid", shape=(len(lompe['v_n_darngrid'])), data=lompe['v_n_darngrid'],
                                    compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
                 grp.create_dataset("mlats_darngrid", shape=(len(lompe['mlats_darngrid'])), data=lompe['mlats_darngrid'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                                   compression="gzip")
                 grp.create_dataset("mlons_darngrid", shape=(len(lompe['mlons_darngrid'])), data=lompe['mlons_darngrid'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+                                   compression="gzip")
 
                 # Electric potential on the Lompe grid
                 grp.create_dataset("e_pot_model", shape=(len(lompe['e_pot_model'])), data=lompe['e_pot_model'],
