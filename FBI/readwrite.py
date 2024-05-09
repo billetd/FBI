@@ -175,9 +175,9 @@ def fbi_load_hdf5(file, timerange=None):
     """
     Load the data saved by fbi_save_hdf5()
     Use timerange as a datetime tuple to only read in between two times
-    :param file:
-    :param timerange:
-    :return:
+    :param file: Path to the FBI hdf5 file
+    :param timerange: Optional. [start_time, end_time] datetime objects from a period of time to read in.
+    :return: lompes: list of dictionaries containing the data
     """
 
     print('Reading: ' + file)

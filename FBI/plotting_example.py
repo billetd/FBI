@@ -15,8 +15,8 @@ if __name__ == '__main__':
 
     # List of files to iterate over
     # fbi_files = glob.glob(fbi_dir + "FBI_*.hdf5")
-    fbi_file = fbi_dir + 'FBI_20240116000000_20240117000000.hdf5'
-    # fbi_file = fbi_dir + 'FBI_20231217001000_20231217002000.hdf5'
+    # fbi_file = fbi_dir + 'FBI_20240116000000_20240117000000.hdf5'
+    fbi_file = fbi_dir + 'FBI_20231217001000_20231217002000.hdf5'
     timerange = [dt.datetime(2023, 12, 17, 0, 0),
                  dt.datetime(2023, 12, 17, 23, 59)]
 
