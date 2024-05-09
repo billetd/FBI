@@ -6,4 +6,4 @@ Install with the following command:
 pip install git+https://github.com/billetd/FBI.git
 ```
 
-All pre-requisites will be installed, if they are not already. A special forked branches of Lompe and pydarnio are also installed, with some small changes, so uninstall the regular versions (if you have them) before installing this.
+All pre-requisites will be installed, if they are not already. Special forked branches of Lompe and pydarnio are also installed, with some small changes, so uninstall the regular versions (if you have them) before installing this.
