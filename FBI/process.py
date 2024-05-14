@@ -133,7 +133,7 @@ def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter):
                              iweight=1.0)
     except AttributeError:
         print('No data in this scan for some reason. Skipping...')
-        return None
+        return None, None
 
     return sd_data, rid
 
