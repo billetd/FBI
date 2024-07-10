@@ -19,22 +19,27 @@ os.environ['RAY_DEDUP_LOGS'] = '0'
 import ray
 
 
-def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_override=None):
+def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_override=None, range_times=None):
     """
 
-    :param all_data:
-    :param timerange:
-    :param lompe_dir:
-    :param cores:
-    :param med_filter: True or False
-    :param scandelta_override:
+    :param all_data: list[dict] - List of dictionaries containing fitacf data read in with fitacf.read_fitacfs()
+    :param timerange: list[datetime] - Start and end times
+    :param lompe_dir: str - Directory to save FBI output file
+    :param cores: int - Number of cores to use when multiprocessing. Choose 1 for single core.
+    :param med_filter: True or False - Median filter the data but putting into Lompe
+    :param scandelta_override: int - Time in seconds to gather data around scans
+    :param range_times: list[datetime] - Custom "scan" intervals
     """
 
     # Supress the annoying Pandas warnings because append is depreciated
     warnings.simplefilter(action='ignore', category=FutureWarning)
 
-    # Get scan times within timerange, based on whichever radar started earlier
-    scan_times, range_times, scan_delta = get_scan_times(all_data, timerange)
+    # If no "range_times"  is given, work it out based on input data
+    # May produce silly scans if there is a mix of normal scan and other modes. Be cautious and only use
+    # if you know what data is going in.
+    if not range_times:
+        # Get scan times within timerange, based on whichever radar started earlier
+        scan_times, range_times, scan_delta = get_scan_times(all_data, timerange)
 
     # Override scan_delta here to integreate more data per scan
     if scandelta_override is not None:

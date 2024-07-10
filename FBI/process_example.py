@@ -87,5 +87,5 @@ def dailies_between_dates():
         gc.collect()
 
 
-simple_process()
+# simple_process()
 # dailies_between_dates()
