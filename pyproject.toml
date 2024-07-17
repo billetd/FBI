@@ -8,7 +8,7 @@ dynamic = ["version"]
 # Note: To install, must specify one of [local] or [from_github]
 dependencies = [
     "ray",
-    "numpy",
+    "numpy = 1.26.4",
     "apexpy",
     "spaceweather",
     "h5py",
