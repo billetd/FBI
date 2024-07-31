@@ -11,12 +11,14 @@ import math
 from FBI.utils import find_indexes_within_time_range
 
 
-def read_fitacfs(fitacf_files, cores=1):
+def read_fitacfs(fitacf_files, cores=1, start=None, end=None):
     """
     Reads fitacf files into one big list [number of files] of list [number of records]
     of dictionaries [fitacf variables]
-    :param fitacf_files: list[str], list of fitacf files to read
+    :param fitacf_files: list[str], list of fitacf files to read. Must be a list/array, even if just one file
     :param cores: int, number of cores to use when parallel reading files. Defaults to zero.
+    :param start: Start time to store, default the start of the file
+    :param end: End time to store, default the end of the file
     :return:
     """
 
@@ -26,7 +28,7 @@ def read_fitacfs(fitacf_files, cores=1):
     ray.init(num_cpus=cores)
 
     @ray.remote
-    def sdarnreadmulti(fitacf_file):
+    def sdarnreadmulti(fitacf_file, start=None, end=None):
         print('Reading: ' + fitacf_file)
         sdarnread = pydarn.SuperDARNRead(fitacf_file)
         fitacf_data = sdarnread.read_fitacf()
@@ -42,11 +44,29 @@ def read_fitacfs(fitacf_files, cores=1):
                 new_dict[key] = d.get(key)  # This will return None if key is missing
             new_fitacf_data.append(new_dict)
         del fitacf_data
+
+        # Get all times in the file
+        rid_record_times = [dt.datetime(new_fitacf_data[x]['time.yr'], new_fitacf_data[x]['time.mo'],
+                                        new_fitacf_data[x]['time.dy'], new_fitacf_data[x]['time.hr'],
+                                        new_fitacf_data[x]['time.mt'], new_fitacf_data[x]['time.sc'],
+                                        new_fitacf_data[x]['time.us'])
+                            for x in range(0, len(new_fitacf_data))]
+
+        if start is None:
+            start = rid_record_times[0]
+        if end is None:
+            end = rid_record_times[-1]
+
+        filtered_indices = [i for i, time in enumerate(rid_record_times) if start <= time <= end]
+        new_new_fitacf_data = [new_fitacf_data[index] for index in filtered_indices]
+
         gc.collect()
-        return new_fitacf_data
+        return new_new_fitacf_data
 
     # Read in all the files
-    all_data = ray.get([sdarnreadmulti.remote(inp) for inp in fitacf_files])
+    start_id = ray.put(start)
+    end_id = ray.put(end)
+    all_data = ray.get([sdarnreadmulti.remote(inp, start_id, end_id) for inp in fitacf_files])
     ray.shutdown()
     return all_data
 
@@ -177,6 +197,7 @@ def median_filter(fitacf_data, record, max_beams, gate):
 
     # Score to beat when summing scatter in range gates. Will be halved if on a beam/range edge.
     weight_score = 24
+    # weight_score = 6
 
     weighting_array = np.array([[[1, 1, 1], [1, 2, 1], [1, 1, 1]],
                                 [[2, 2, 2], [2, 4, 2], [2, 2, 2]],
