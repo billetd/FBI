@@ -60,7 +60,7 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     print('Shrinking data...')
     all_data_iterable = all_data_make_iterable(all_data, range_times, scan_delta)
 
-    # lompe_data = lompe_parallel(range_times[0], all_data_iterable[0], kps[0], scan_delta, darn_grid_stuff)
+    # lompe_data = lompe_parallel(range_times[5], all_data_iterable[5], kps[5], scan_delta, darn_grid_stuff, True)
 
     # Initialise workers for parallelisation (or not) and put in constants
     ray.init(num_cpus=cores)
@@ -240,27 +240,27 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
                     (le_current, ln_current, le_mag_current, ln_mag_current, ve_geo_current, vn_geo_current,
                      ve_mag_current, vn_mag_current) = fitacf_get_k_vector_circle(apex, stid, lat, lon, mlat, mlon,
                                                                                   vel_range)
+                    # Append to returned lists
+                    rid.append(all_data[file_index][record]['stid'])
+                    glat.append(lat)
+                    glon.append(lon)
+                    mlats.append(mlat)
+                    mlons.append(mlon)
+                    vlos.append(abs(vel_range))  # Needs to be magnitude of the velocity, sign is handled by azimuth
+                    vlos_err.append(abs(all_data[file_index][record]['v_e'][j]))
+                    le.append(le_current)
+                    ln.append(ln_current)
+                    le_mag.append(le_mag_current)
+                    ln_mag.append(ln_mag_current)
+                    ve_geo.append(ve_geo_current)
+                    vn_geo.append(vn_geo_current)
+                    ve_mag.append(ve_mag_current)
+                    vn_mag.append(vn_mag_current)
 
-                    # Append to placeholder arrays
-                    rid = np.append(rid, all_data[file_index][record]['stid'])
-                    glat = np.append(glat, lat)
-                    glon = np.append(glon, lon)
-                    mlats = np.append(mlats, mlat)
-                    mlons = np.append(mlons, mlon)
-
-                    # Needs to be magnitude of the velocity, sign is handled by azimuth
-                    vlos = np.append(vlos, abs(vel_range))
-                    vlos_err = np.append(vlos_err, abs(all_data[file_index][record]['v_e'][j]))
-                    le = np.append(le, le_current)
-                    ln = np.append(ln, ln_current)
-                    le_mag = np.append(le_mag, le_mag_current)
-                    ln_mag = np.append(ln_mag, ln_mag_current)
-                    ve_geo = np.append(ve_geo, ve_geo_current)
-                    vn_geo = np.append(vn_geo, vn_geo_current)
-                    ve_mag = np.append(ve_mag, ve_mag_current)
-                    vn_mag = np.append(vn_mag, vn_mag_current)
-
-    return glat, glon, mlats, mlons, le, ln, le_mag, ln_mag, vlos, vlos_err, rid, ve_mag, vn_mag
+    return (np.array(glat), np.array(glon), np.array(mlats), np.array(mlons), np.array(le), np.array(ln),
+            np.array(le_mag), np.array(ln_mag), np.array(vlos), np.array(vlos_err), np.array(rid),
+            np.array(ve_mag),
+            np.array(vn_mag))
 
 
 def run_lompe_model(time, sd_data, kp):
