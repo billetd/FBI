@@ -30,6 +30,7 @@ def read_fitacfs(fitacf_files, cores=1, start=None, end=None):
     @ray.remote
     def sdarnreadmulti(fitacf_file, start=None, end=None):
         print('Reading: ' + fitacf_file)
+
         sdarnread = pydarn.SuperDARNRead(fitacf_file)
         fitacf_data = sdarnread.read_fitacf()
 
@@ -67,6 +68,7 @@ def read_fitacfs(fitacf_files, cores=1, start=None, end=None):
     start_id = ray.put(start)
     end_id = ray.put(end)
     all_data = ray.get([sdarnreadmulti.remote(inp, start_id, end_id) for inp in fitacf_files])
+    all_data = [x for x in all_data if x and x is not None]  # Gets rid of empty lists and None's
     ray.shutdown()
     return all_data
 
@@ -203,6 +205,10 @@ def median_filter(fitacf_data, record, max_beams, gate):
                                 [[2, 2, 2], [2, 4, 2], [2, 2, 2]],
                                 [[1, 1, 1], [1, 2, 1], [1, 1, 1]]
                                 ])
+    # weighting_array = np.array([[[1, 2, 1], [2, 3, 2], [1, 2, 1]],
+    #                             [[2, 3, 2], [3, 5, 3], [2, 3, 2]],
+    #                             [[1, 2, 1], [2, 3, 2], [1, 2, 1]]
+    #                             ])
 
     # Total number of records in this file
     n_recs = len(fitacf_data)
@@ -245,6 +251,9 @@ def median_filter(fitacf_data, record, max_beams, gate):
                     except (KeyError, IndexError) as err:
                         continue
                     current_beam_gscat = fitacf_data[scan + beam_diff]['gflg']
+
+                    print(scan_counter, beam_counter)
+                    print(fitacf_data[scan + beam_diff]['bmnum'])
 
                     # Check the gates are in slist
                     isin = np.isin([gates[0], gates[1], gates[2]], current_beam_slist)
