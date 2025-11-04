@@ -1,5 +1,6 @@
-Code for SuperDARN Borealis 3.5s integration into [lompe](https://github.com/klaundal/lompe), with plotting functions. Can also be used to read in SuperDARN FitACF level data and put it into a format that Lompe accepts.
+Code for SuperDARN Borealis 3.5s integration into [lompe](https://github.com/klaundal/lompe), with plotting functions, otherwise known as the Fast Borealis Ionosphere (FBI). Can also be used to read in SuperDARN FitACF level data and put it into a format that Lompe accepts.
 
+FBI data can be obtained from [superdarn.ca](https://superdarn.ca/fbi), which can be read in with this package.
 
 # Installation
 Install with the following command:

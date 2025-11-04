@@ -15,8 +15,8 @@ dependencies = [
     "matplotlib",
     "cartopy",
     "geodarn @ git+https://github.com/billetd/geodarn.git@main",
+    "pydarn <= 4.0",
     "pydarnio @ git+https://github.com/billetd/pyDARNio@borealis_v0.7",
-    "pydarn @ git+https://github.com/SuperDARN/pydarn.git@develop",
     "lompe[deps-from-github,extras] @ git+https://github.com/billetd/lompe.git@main",
 ]
 
