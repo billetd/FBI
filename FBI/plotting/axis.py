@@ -21,6 +21,8 @@ def get_local_axis(apex):
     # Set up the plot
     pos_lower = [-82, 56]
     pos_higher = [64, 71]
+    # pos_lower = [-82, 40]
+    # pos_higher = [50, 50]
     xs, ys, zs = ot.transform_points(ccrs.PlateCarree(), np.array((pos_lower[0], pos_lower[1])),
                                      np.array((pos_higher[0], pos_higher[1]))).T
 

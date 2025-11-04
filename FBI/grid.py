@@ -25,6 +25,7 @@ def sdarn_grid(apex):
 
     # Get the Superdarn grid
     _, _, darn_grid = create_grid(60, 1, 'north')
+    # _, _, darn_grid = create_grid(10, 1, 'north')
     darn_grid = darn_grid.reshape(-1, 2)
     mlats_darngrid = darn_grid[:, 1].compressed()
     mlons_darngrid = darn_grid[:, 0].compressed()
@@ -46,13 +47,16 @@ def lompe_grid_canada(apex):
     """
 
     # cubed sphere grid parameters:
-    mag_position = (-34, 81)
+    # mag_position = (-34, 81)
+    mag_position = (-34, 70)
     lat, lon, z = apex.apex2geo(mag_position[1], mag_position[0], 300)
     position = (lon, lat)  # lon, lat for center of the grid
 
     # Current one
     orientation = -127.7
     l, w, lres, wres = 5000e3, 4000e3, 75.e3, 75.e3  # slightly shorter, for polar plotting
+    # l, w, lres, wres = 16000e3, 16000e3, 150.e3, 150.e3  # for bill
+    # l, w, lres, wres = 10000e3, 10000e3, 150.e3, 150.e3
 
     # Create grid object:
     grid = lompe.cs.CSgrid(lompe.cs.CSprojection(position, orientation), l, w, lres, wres, R=6481.2e3)

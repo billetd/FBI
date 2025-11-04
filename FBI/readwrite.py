@@ -11,7 +11,7 @@ def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff, rids):
     :param apex:
     :param scan_time:
     :param darn_grid_stuff:
-    :param rids:
+    :param rids: NOTE - I think this needs to be fixed to remove radars outside of lompe grid area
     :return:
     """
 
@@ -21,6 +21,7 @@ def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff, rids):
     glons_darngrid = darn_grid_stuff['glons_darngrid'][ingrid]
     mlats_darngrid = darn_grid_stuff['mlats_darngrid'][ingrid]
     mlons_darngrid = darn_grid_stuff['mlons_darngrid'][ingrid]
+    # Include rids here
 
     # Darngrid velocities
     v_e_geo_darngrid, v_n_geo_darngrid = scan_lompe.v(lon=glons_darngrid, lat=glats_darngrid)
@@ -202,7 +203,8 @@ def fbi_load_hdf5(file, timerange=None):
                                         f[group + '/' + 'scan_month'][0],
                                         f[group + '/' + 'scan_day'][0],
                                         f[group + '/' + 'scan_hour'][0],
-                                        f[group + '/' + 'scan_minute'][0])
+                                        f[group + '/' + 'scan_minute'][0],
+                                        f[group + '/' + 'scan_second'][0])
                 if timerange[0] <= this_time < timerange[1]:
                     pass
                 else:

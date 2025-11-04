@@ -96,6 +96,11 @@ def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
                                magn_src_crs_thick, v_src_crs_thick * magnitude_thick / magn_src_crs_thick,
                                magnitude_thick, norm=colours_norm, scale=2000, scale_units='inches', width=0.003,
                                headwidth=3, transform=ccrs.PlateCarree(), angles='xy', cmap='viridis', zorder=3)
+        # Plot thick vectors
+        # quiv_thick = ax.quiver(thick_mlons, thick_mlats, u_src_crs_thick * magnitude_thick /
+        #                        magn_src_crs_thick, v_src_crs_thick * magnitude_thick / magn_src_crs_thick,
+        #                        magnitude_thick, norm=colours_norm, scale=2000, scale_units='inches', width=0.002,
+        #                        headwidth=3, transform=ccrs.PlateCarree(), angles='xy', cmap='viridis', zorder=3)
     else:
         quiv_thick = None
         quiv_thin = None
