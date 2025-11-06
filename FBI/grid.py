@@ -47,8 +47,8 @@ def lompe_grid_canada(apex):
     """
 
     # cubed sphere grid parameters:
-    # mag_position = (-34, 81)
-    mag_position = (-34, 70)
+    mag_position = (-34, 81)
+    # mag_position = (-34, 70)
     lat, lon, z = apex.apex2geo(mag_position[1], mag_position[0], 300)
     position = (lon, lat)  # lon, lat for center of the grid
 
