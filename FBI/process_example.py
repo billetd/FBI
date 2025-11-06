@@ -29,7 +29,7 @@ def simple_process():
     all_data = fitacf.read_fitacfs(fitacf_files, cores=5)
 
     # Go and do the rest of the processing
-    process.process(all_data, [start_time, end_time], lompe_dir, cores=5, med_filter=True,
+    process.process(all_data, [start_time, end_time], lompe_dir, cores=5, med_filter=False,
                     scandelta_override=7)
     # 7
 

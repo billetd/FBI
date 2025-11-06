@@ -5,16 +5,14 @@ SuperDARN data
 import apexpy
 import lompe
 import datetime as dt
-
 import pydarn
-
 import FBI.grid as grid
 import os
 import gc
 import numpy as np
 import warnings
 from FBI.readwrite import lompe_extract, fbi_save_hdf5
-from FBI.utils import find_indexes_within_time_range, get_kp_iterable
+from FBI.utils import find_indexes_within_time_range
 from FBI.fitacf import get_scan_times, all_data_make_iterable, median_filter, fitacf_get_k_vector_circle
 from pydarn.utils.coordinates import gate2geographic_location
 from FBI.grid import lompe_grid_canada
@@ -51,10 +49,6 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     # Initialise an apexpy object, for magnetic transforms
     apex = apexpy.Apex(range_times[0], refh=300)
 
-    # Get Kp indices for time in question, as an interable
-    print('Getting Kp indexes...')
-    kps = get_kp_iterable(range_times)
-
     # Get the Superdarn grid
     # This is used for plotting purposes later, e.g. shading darker vectors where there is data
     darn_grid_stuff = grid.sdarn_grid(apex)
@@ -63,18 +57,16 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     print('Shrinking data...')
     all_data_iterable = all_data_make_iterable(all_data, range_times, scan_delta)
 
-    # lompe_data = lompe_parallel(range_times[5], all_data_iterable[5], kps[5], scan_delta, darn_grid_stuff, True)
-
+    # This commented bit does just one record - for debugging
+    # result = lompe_parallel(range_times[0], all_data_iterable[0], kps[0], scan_delta, darn_grid_stuff, med_filter)
     # Initialise workers for parallelisation (or not) and put in constants
     ray.init(num_cpus=cores)
     scan_delta_id = ray.put(scan_delta)
     darn_grid_stuff_id = ray.put(darn_grid_stuff)
     med_filter_id = ray.put(med_filter)
-    result_ids = [lompe_parallel.remote(scan_time, this_scan_data, kp, scan_delta_id, darn_grid_stuff_id, med_filter_id)
-                  for scan_time, this_scan_data, kp
-                  in zip(range_times, all_data_iterable, kps)]
-    # This commented bit does just one record - for debugging
-    # result = lompe_parallel(range_times[0], all_data_iterable[0], kps[0], scan_delta, darn_grid_stuff, med_filter)
+    result_ids = [lompe_parallel.remote(scan_time, this_scan_data, scan_delta_id, darn_grid_stuff_id, med_filter_id)
+                  for scan_time, this_scan_data
+                  in zip(range_times, all_data_iterable)]
     lompes = ray.get(result_ids)
     ray.shutdown()
 
@@ -84,12 +76,11 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
 
 # Must comment out this line if debugging
 @ray.remote
-def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff, med_filter):
+def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter):
     """
     Code to create a lompe fit for a given scan time. Designed to be paraellelised with ray.
     :param scan_time:
     :param all_data:
-    :param kp:
     :param scan_delta:
     :param darn_grid_stuff:
     :param med_filter:
@@ -103,7 +94,7 @@ def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff, med_fil
 
     if sd_data is not None:  # Make sure there's data before continuing
         # Run lompe
-        scan_lompe = run_lompe_model(scan_time, sd_data, kp)
+        scan_lompe = run_lompe_model(scan_time, sd_data)
 
         # Collect the model data to save
         if scan_lompe is not None:  # I had the run break on inversion randomly once. Not sure why.
@@ -267,7 +258,7 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
             np.array(vn_mag))
 
 
-def run_lompe_model(time, sd_data, kp):
+def run_lompe_model(time, sd_data):
     """
 
     Segregated code to run the lompe model
@@ -278,13 +269,8 @@ def run_lompe_model(time, sd_data, kp):
     apex = apexpy.Apex(time, refh=300)
     canada_grid = lompe_grid_canada(apex)
 
-    # Now do conductance using the hardy model
-    # Kp = 4  # Manual override
-    SH = lompe.conductance.hardy_EUV(canada_grid.lon, canada_grid.lat, int(kp), time, 'hall')
-    SP = lompe.conductance.hardy_EUV(canada_grid.lon, canada_grid.lat, int(kp), time, 'pedersen')
-
     # Create Emodel object. Pass grid and Hall/Pedersen conductance functions
-    model = lompe.Emodel(canada_grid, Hall_Pedersen_conductance=(SH, SP))
+    model = lompe.Emodel(canada_grid, Hall_Pedersen_conductance=None)
 
     # Add all the vectors to the model object
     model.add_data(sd_data)
