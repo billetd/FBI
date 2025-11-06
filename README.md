@@ -43,13 +43,3 @@ model.add_data(superdarn_data)  # Add other data objects as appropriate
 model.run_inversion(l1=10, l2=0.1, lapack_driver='gelsy') # Adjust regularisation as appropriate
 ```
 
-# Apexpy Bug Warning
-
-There is currently a bug in Apexpy ([issue here](https://github.com/aburrell/apexpy/issues/134)) that stops it working with Numpy version 2.0. Untill this is fixed, you will need to downgrade Numpy is order to use FBI. After installing FBI:
-```python 
-pip uninstall numpy
-``` 
-and then 
-```python 
-pip install numpy==1.26.4
-``` 

@@ -8,16 +8,19 @@ dynamic = ["version"]
 # Note: To install, must specify one of [local] or [from_github]
 dependencies = [
     "ray",
-    "numpy",
-    "apexpy",
+    "numpy < 2.3.0",
+    "apexpy @ git+https://github.com/aburrell/apexpy@develop",
     "spaceweather",
     "h5py",
     "matplotlib",
     "cartopy",
     "geodarn @ git+https://github.com/billetd/geodarn.git@main",
-    "pydarn <= 4.0",
-    "pydarnio @ git+https://github.com/billetd/pyDARNio@borealis_v0.7",
-    "lompe[deps-from-github,extras] @ git+https://github.com/billetd/lompe.git@main",
+    "pydarn @ git+https://github.com/SuperDARN/pydarn@develop",
+    "pydarnio",
+    "lompe @ git+https://github.com/billetd/lompe.git@main",
+    "dipole @ git+https://github.com/klaundal/dipole.git@main#egg=dipole",
+    "polplot @ git+https://github.com/klaundal/polplot.git@main#egg=polplot",
+    "secsy @ git+https://github.com/klaundal/secsy.git@main#egg=secsy",
 ]
 
 [project.optional-dependencies]

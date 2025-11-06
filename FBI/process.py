@@ -5,6 +5,9 @@ SuperDARN data
 import apexpy
 import lompe
 import datetime as dt
+
+import pydarn
+
 import FBI.grid as grid
 import os
 import gc
@@ -79,6 +82,7 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     fbi_save_hdf5(lompes, timerange, lompe_dir)
 
 
+# Must comment out this line if debugging
 @ray.remote
 def lompe_parallel(scan_time, all_data, kp, scan_delta, darn_grid_stuff, med_filter):
     """
@@ -228,7 +232,7 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
                         continue
 
                     # Get coordinates of this beam/gate
-                    lat, lon = gate2geographic_location(stid=stid, beam=beam, range_gate=gate, height=300,
+                    lat, lon = gate2geographic_location(stid=pydarn.RadarID(stid), beam=beam, range_gate=gate, height=300,
                                                         center=True, rsep=rsep, frang=frang)
                     mlat, mlon = apex.geo2apex(lat, lon, 300)
 

@@ -31,8 +31,9 @@ def read_fitacfs(fitacf_files, cores=1, start=None, end=None):
     def sdarnreadmulti(fitacf_file, start=None, end=None):
         print('Reading: ' + fitacf_file)
 
-        sdarnread = pydarn.SuperDARNRead(fitacf_file)
-        fitacf_data = sdarnread.read_fitacf()
+        # sdarnread = pydarn.SuperDARNRead(fitacf_file)
+        # fitacf_data = sdarnread.read_fitacf()
+        fitacf_data, _ = pydarn.read_fitacf(fitacf_file)
 
         # Keep only keys which are required for lompe
         keys_to_keep = ['time.yr', 'time.mo', 'time.dy', 'time.hr', 'time.mt', 'time.sc',
@@ -252,8 +253,8 @@ def median_filter(fitacf_data, record, max_beams, gate):
                         continue
                     current_beam_gscat = fitacf_data[scan + beam_diff]['gflg']
 
-                    print(scan_counter, beam_counter)
-                    print(fitacf_data[scan + beam_diff]['bmnum'])
+                    # print(scan_counter, beam_counter)
+                    # print(fitacf_data[scan + beam_diff]['bmnum'])
 
                     # Check the gates are in slist
                     isin = np.isin([gates[0], gates[1], gates[2]], current_beam_slist)
@@ -290,8 +291,8 @@ def fitacf_get_k_vector_circle(apex, stid, lat, lon, mlat, mlon, v_los):
     """
 
     # Get position of radar in geographic from hdw files in pyDARN
-    radlat = pydarn.SuperDARNRadars.radars[stid].hardware_info.geographic.lat
-    radlon = pydarn.SuperDARNRadars.radars[stid].hardware_info.geographic.lon
+    radlat = pydarn.SuperDARNRadars.radars[pydarn.RadarID(stid)].hardware_info.geographic.lat
+    radlon = pydarn.SuperDARNRadars.radars[pydarn.RadarID(stid)].hardware_info.geographic.lon
     radmlat, radmlon = apex.geo2apex(radlat, radlon, 300)
 
     # Graciously copied from Evan's code (invmag.pro)
