@@ -81,7 +81,7 @@ def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
         locs = []
         for this_mlat, this_mlon in zip(mlats_idx, mlons_idx):
             loc = np.where((this_mlat == mlats) & ((np.floor(this_mlon) == mlons) | (np.ceil(this_mlon) == mlons)))
-            if loc[0]:
+            if len(loc[0]) > 0:
                 locs.append(loc[0])
 
         u_src_crs_thick = u_src_crs[locs]
