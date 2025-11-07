@@ -114,7 +114,49 @@ def all_data_make_iterable(all_data, range_times, scan_delta):
     return all_data_iterable
 
 
-def get_scan_times(all_data, timerange):
+def get_scan_times_widebeam(all_data, timerange):
+
+    all_times = [
+        [dt.datetime(record["time.yr"],
+                     record["time.mo"],
+                     record["time.dy"],
+                     record["time.hr"],
+                     record["time.mt"],
+                     record["time.sc"],
+                     record["time.us"])
+         for record in all_data[radar]
+         ]
+        for radar in range(len(all_data))
+    ]
+
+    unique_times = [set(radar) for radar in all_times]
+    sorted_times = [sorted(radar) for radar in unique_times]
+
+    # Scan lengths
+    diffs = [[(t2 - t1) for t1, t2 in zip(radar, radar[1:])] for radar in sorted_times]
+
+    # Check for data gaps, which would manifest as a diff much bigger than all the others
+    # The mimimum diff should be close-ish to the average. Use that as a first "best guess"
+    # Any diff that is off from 50% of the min is considered a delayed scan, and is removed when considering the avg
+    # Need to subtract min from diffs and check to see which are over threshold
+    diffs_threshold = [0.5*min(radar) for radar in diffs]
+    filtered_diffs = [[d for d in diffs[i] if d-min(diffs[i]) < diffs_threshold[i]]
+                      for i in range(len(diffs_threshold))]
+
+    # Get average scan lengths
+    average_diffs = [sum(radar, radar[0]-radar[0]) / len(radar) for radar in filtered_diffs]
+    scan_delta = sum(average_diffs, average_diffs[0]-average_diffs[0]) / len(average_diffs)
+
+    # Should start at least when we get the first data, not the timerange specified
+    # This avoids empty records
+    first_time = min(unique_times[0])
+    range_times = [first_time + i * scan_delta
+                   for i in range(int((timerange[1] - first_time) / scan_delta) + 1)]
+
+    return range_times, scan_delta
+
+
+def get_scan_times_old(all_data, timerange):
     """
 
     :param all_data: list[list[dict]], list of list of dictionaries containing all the fitacf data read in from
