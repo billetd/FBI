@@ -14,7 +14,7 @@ import warnings
 from FBI.readwrite import lompe_extract, fbi_save_hdf5
 from FBI.utils import find_indexes_within_time_range
 from FBI.fitacf import get_scan_times_widebeam, all_data_make_iterable, median_filter, fitacf_get_k_vector_circle
-# from FBI.fitacf import get_scan_times_old
+from FBI.fitacf import get_scan_times_old
 from pydarn.utils.coordinates import gate2geographic_location
 from FBI.grid import lompe_grid_canada
 os.environ['RAY_DEDUP_LOGS'] = '0'
@@ -41,8 +41,11 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     # if you know what data is going in.
     if not range_times:
         # Get scan times within timerange, based on whichever radar started earlier
-        # scan_times, range_times, scan_delta = get_scan_times_old(all_data, timerange)
-        range_times, scan_delta = get_scan_times_widebeam(all_data, timerange)
+        # Run the old way if using "scanning data", or the new way if using widebeam data
+        if all_data[0][1]['scan'] == 0:
+            scan_times, range_times, scan_delta = get_scan_times_old(all_data, timerange)
+        else:
+            range_times, scan_delta = get_scan_times_widebeam(all_data, timerange)
 
     # Override scan_delta here to integreate more data per scan
     if scandelta_override is not None:
