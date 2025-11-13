@@ -11,7 +11,7 @@ pip install git+https://github.com/billetd/FBI.git
 
 All pre-requisites will be installed, if they are not already. 
 
-**Important note:** Special forked branches of Lompe and pydarnio are also installed, with some small changes to make FBI work properly. If you already have `pydarnio` or `Lompe` installed, uninstall them before installing this.
+**Important note:** A special forked branch of Lompe is installed, with some small changes to make FBI work properly. If you already have `Lompe` installed in the enviroment you are using `FBI`, uninstall before installing `FBI`. I recommend a fresh virtual enviroment.
 
 # Creating an FBI output file
 
