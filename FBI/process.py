@@ -2,6 +2,9 @@
 This module contains code for creating lompe fits between a given timerange, using the already read in
 SuperDARN data
 """
+import warnings
+# Supress RunetimeWarnings due to not calculating conductances (np.linalg)
+warnings.filterwarnings('ignore', category=RuntimeWarning, module='numpy')
 import apexpy
 import lompe
 import datetime as dt
@@ -10,7 +13,6 @@ import FBI.grid as grid
 import os
 import gc
 import numpy as np
-import warnings
 from FBI.readwrite import lompe_extract, fbi_save_hdf5
 from FBI.utils import find_indexes_within_time_range
 from FBI.fitacf import get_scan_times_widebeam, all_data_make_iterable, median_filter, fitacf_get_k_vector_circle
@@ -32,9 +34,6 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     :param scandelta_override: int - Time in seconds to gather data around scans
     :param range_times: list[datetime] - Custom "scan" intervals
     """
-
-    # Supress the annoying Pandas warnings because append is depreciated
-    warnings.simplefilter(action='ignore', category=FutureWarning)
 
     # If no "range_times"  is given, work it out based on input data
     # May produce silly scans if there is a mix of normal scan and other modes. Be cautious and only use
@@ -63,7 +62,7 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     all_data_iterable = all_data_make_iterable(all_data, range_times, scan_delta)
 
     # This commented bit does just one record - for debugging
-    # result = lompe_parallel(range_times[0], all_data_iterable[0], kps[0], scan_delta, darn_grid_stuff, med_filter)
+    # result = lompe_parallel(range_times[0], all_data_iterable[0], scan_delta, darn_grid_stuff, med_filter)
     # Initialise workers for parallelisation (or not) and put in constants
     ray.init(num_cpus=cores)
     scan_delta_id = ray.put(scan_delta)

@@ -3,3 +3,5 @@ tmp/
 paper_code/
 .idea/
 /grab_data.py
+/process_example.py
+/plotting_example.py
