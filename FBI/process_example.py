@@ -8,7 +8,6 @@ import FBI.fitacf as fitacf
 import FBI.process as process
 import gc
 
-
 def simple_process():
 
     # Locations of files to read
@@ -22,14 +21,14 @@ def simple_process():
 
     # Times to process between
     # Make sure these times are actually in the fitacfs you have
-    start_time = dt.datetime(2025, 7, 14, 5, 0)
-    end_time = dt.datetime(2025, 7, 14, 5, 1)
+    start_time = dt.datetime(2024, 2, 13, 14, 0)
+    end_time = dt.datetime(2024, 2, 13, 14, 30)
 
     # Read in 5 at a time (change based on your computers core capacity)
     all_data = fitacf.read_fitacfs(fitacf_files, cores=5)
 
     # Go and do the rest of the processing
-    process.process(all_data, [start_time, end_time], lompe_dir, cores=5, med_filter=False,
+    process.process(all_data, [start_time, end_time], lompe_dir, cores=5, med_filter=True,
                     scandelta_override=7)
     # 7
 

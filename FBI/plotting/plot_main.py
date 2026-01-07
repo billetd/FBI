@@ -7,7 +7,7 @@ from FBI.plotting.plot import plot_noon_line, plot_vecs_model_darn_grid, plot_po
     plot_boundary_box
 
 
-def lompe_scan_plot_vectors(lompe, path, save=True):
+def lompe_scan_plot_vectors(lompe, path=None, save=True):
     """
 
     :param path:

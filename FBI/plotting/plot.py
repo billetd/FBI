@@ -4,6 +4,7 @@ from geodarn.gridding import create_grid_records
 from matplotlib import pyplot as plt, ticker, cm
 from matplotlib.colors import Normalize
 from FBI.grid import Container
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 
 def plot_noon_line(apex, time, coord='mlt'):
@@ -111,8 +112,14 @@ def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
     ticks = locator.tick_values(vmin=0, vmax=1000)
 
     # Add a small axis for the colorbar
-    sub_ax = plt.axes([0.77, 0.1, 0.03, 0.8])
-    cb = plt.colorbar(mappable, extend='max', ticks=ticks, cax=sub_ax)
+    cax = inset_axes(ax,
+                     width="90%",  # width of colorbar
+                     height="3%",  # height of colorbar
+                     loc='lower center',
+                     bbox_to_anchor=(0.05, 0., 1, 1),
+                     bbox_transform=ax.transAxes,
+                     borderpad=0)
+    cb = plt.colorbar(mappable, extend='max', ticks=ticks, cax=cax)
     cb.set_label(r'Ionospheric Drift Velocity [ms$^{-1}$]')
 
     return quiv_thin, quiv_thick
