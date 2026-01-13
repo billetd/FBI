@@ -62,11 +62,12 @@ def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
     v_emag = np.delete(v_emag, hilats)
     v_nmag = np.delete(v_nmag, hilats)
 
-    # Rotate and scale vectors (https://github.com/SciTools/cartopy/issues/1179)
-    u_src_crs = v_emag / np.cos(mlats / 180 * np.pi)
-    v_src_crs = v_nmag
-    magnitude = np.sqrt(v_emag ** 2 + v_nmag ** 2)
-    magn_src_crs = np.sqrt(u_src_crs ** 2 + v_src_crs ** 2)
+    if coord == 'mag':# Rotate and scale vectors (https://github.com/SciTools/cartopy/issues/1179)
+        u_src_crs = v_emag / np.cos(mlats / 180 * np.pi)
+        v_src_crs = v_nmag
+    elif coord == 'mlt':
+        u_src_crs = v_emag
+        v_src_crs = v_nmag
 
     colours_norm = Normalize(vmin=0, vmax=1000)
     if coord == 'mag':
@@ -102,6 +103,31 @@ def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
         #                        magn_src_crs_thick, v_src_crs_thick * magnitude_thick / magn_src_crs_thick,
         #                        magnitude_thick, norm=colours_norm, scale=2000, scale_units='inches', width=0.002,
         #                        headwidth=3, transform=ccrs.PlateCarree(), angles='xy', cmap='viridis', zorder=3)
+    elif coord == 'mlt':
+        mlts = apex.mlon2mlt(mlons, time)
+        quiv_thin = ax.quiver(mlats, mlts, v_src_crs, u_src_crs, magnitude,
+                              norm=colours_norm, scale=2000, scale_units='inches', width=0.001,
+                              headwidth=7, headlength=4, headaxislength=1.5, angles='xy', cmap='viridis', zorder=3)
+
+        mlats_idx = mlats_grid[idx_in_grid].compressed()
+        mlons_idx = mlons_grid[idx_in_grid].compressed()
+        locs = []
+        for this_mlat, this_mlon in zip(mlats_idx, mlons_idx):
+            loc = np.where((this_mlat == mlats) & ((np.floor(this_mlon) == mlons) | (np.ceil(this_mlon) == mlons)))
+            if loc[0]:
+                locs.append(loc[0])
+
+        u_src_crs_thick = u_src_crs[locs]
+        v_src_crs_thick = v_src_crs[locs]
+        magnitude_thick = magnitude[locs]
+        magn_src_crs_thick = magn_src_crs[locs]
+        thick_mlons = mlons[locs]
+        thick_mlats = mlats[locs]
+
+        thick_mlts = apex.mlon2mlt(thick_mlons, time)
+        quiv_thick = ax.quiver(thick_mlats, thick_mlts, v_src_crs_thick, u_src_crs_thick, magnitude_thick,
+                               norm=colours_norm, scale=2000, scale_units='inches', width=0.0015,
+                               headwidth=7, headlength=4, headaxislength=1.5,angles='xy', cmap='viridis', zorder=3)
     else:
         quiv_thick = None
         quiv_thin = None
