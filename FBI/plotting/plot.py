@@ -116,10 +116,10 @@ def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
                      width="90%",  # width of colorbar
                      height="3%",  # height of colorbar
                      loc='lower center',
-                     bbox_to_anchor=(0.05, 0., 1, 1),
+                     bbox_to_anchor=(0, -0.05, 1, 1),
                      bbox_transform=ax.transAxes,
                      borderpad=0)
-    cb = plt.colorbar(mappable, extend='max', ticks=ticks, cax=cax)
+    cb = plt.colorbar(mappable, extend='max', ticks=ticks, cax=cax, orientation='horizontal')
     cb.set_label(r'Ionospheric Drift Velocity [ms$^{-1}$]')
 
     return quiv_thin, quiv_thick

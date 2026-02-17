@@ -61,6 +61,13 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     print('Shrinking data...')
     all_data_iterable = all_data_make_iterable(all_data, range_times, scan_delta)
 
+    # Retrive a grid encompassing the SuperDARN Canada PolarDARNs
+    apex = apexpy.Apex(range_times[0], refh=300)
+    canada_grid = lompe_grid_canada(apex)
+
+    # Create Emodel object. Pass grid and Hall/Pedersen conductance functions
+    model = lompe.Emodel(canada_grid, Hall_Pedersen_conductance=None)
+
     # This commented bit does just one record - for debugging
     # result = lompe_parallel(range_times[0], all_data_iterable[0], scan_delta, darn_grid_stuff, med_filter)
     # Initialise workers for parallelisation (or not) and put in constants
@@ -68,7 +75,9 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     scan_delta_id = ray.put(scan_delta)
     darn_grid_stuff_id = ray.put(darn_grid_stuff)
     med_filter_id = ray.put(med_filter)
-    result_ids = [lompe_parallel.remote(scan_time, this_scan_data, scan_delta_id, darn_grid_stuff_id, med_filter_id)
+    model_id = ray.put(model)
+    result_ids = [lompe_parallel.remote(scan_time, this_scan_data, scan_delta_id, darn_grid_stuff_id,
+                                        med_filter_id, model_id)
                   for scan_time, this_scan_data
                   in zip(range_times, all_data_iterable)]
     lompes = ray.get(result_ids)
@@ -80,7 +89,7 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
 
 # Must comment out this line if debugging
 @ray.remote
-def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter):
+def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter, model):
     """
     Code to create a lompe fit for a given scan time. Designed to be paraellelised with ray.
     :param scan_time:
@@ -88,6 +97,7 @@ def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter)
     :param scan_delta:
     :param darn_grid_stuff:
     :param med_filter:
+    :param model:
     :return:
     """
 
@@ -98,7 +108,7 @@ def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter)
 
     if sd_data is not None:  # Make sure there's data before continuing
         # Run lompe
-        scan_lompe = run_lompe_model(scan_time, sd_data)
+        scan_lompe = run_lompe_model(sd_data, model)
 
         # Collect the model data to save
         if scan_lompe is not None:  # I had the run break on inversion randomly once. Not sure why.
@@ -262,19 +272,12 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
             np.array(vn_mag))
 
 
-def run_lompe_model(time, sd_data):
+def run_lompe_model(sd_data, model):
     """
 
     Segregated code to run the lompe model
 
     """
-
-    # Retrive a grid encompassing the SuperDARN Canada PolarDARNs
-    apex = apexpy.Apex(time, refh=300)
-    canada_grid = lompe_grid_canada(apex)
-
-    # Create Emodel object. Pass grid and Hall/Pedersen conductance functions
-    model = lompe.Emodel(canada_grid, Hall_Pedersen_conductance=None)
 
     # Add all the vectors to the model object
     model.add_data(sd_data)
@@ -286,6 +289,5 @@ def run_lompe_model(time, sd_data):
     except TypeError:
         # I had the run break on inversion randomly once. Not sure why.
         model = None
-    del canada_grid
 
     return model
