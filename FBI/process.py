@@ -66,7 +66,7 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     canada_grid = lompe_grid_canada(apex)
 
     # Create Emodel object. Pass grid and Hall/Pedersen conductance functions
-    model = lompe.Emodel(canada_grid, Hall_Pedersen_conductance=None)
+    model = lompe.Emodel(canada_grid, Hall_Pedersen_conductance=None, ew_regularization_limit=(50, 75))
 
     # This commented bit does just one record - for debugging
     # result = lompe_parallel(range_times[0], all_data_iterable[0], scan_delta, darn_grid_stuff, med_filter)
