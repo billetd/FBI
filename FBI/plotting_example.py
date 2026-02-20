@@ -10,13 +10,15 @@ import datetime as dt
 if __name__ == '__main__':
 
     # Where the plots will be saved
-    fbi_dir = '/Volumes/The Box/FBI/waves_everywhere/20240213/new_fbi/short/'
+    # fbi_dir = '/Volumes/The Box/FBI/waves_everywhere/20240213/new_fbi/short/'
+    fbi_dir = '/Volumes/The Box/FBI/test/fitacfs/2025/01/'
 
     # List of files to iterate over
     # fbi_files = glob.glob(fbi_dir + "FBI_*.hdf5")
-    fbi_file = fbi_dir + 'FBI_20240213140000_20240213143000.hdf5'
-    timerange = [dt.datetime(2024, 2, 13, 14, 0),
-                 dt.datetime(2024, 2, 13, 14, 30)]
+    # fbi_file = fbi_dir + 'FBI_20240213140000_20240213143000.hdf5'
+    fbi_file = fbi_dir + 'FBI_20250131200000_20250131201000.hdf5'
+    timerange = [dt.datetime(2025, 1, 31, 20, 0),
+                 dt.datetime(2025, 1, 31, 20, 5)]
 
     # for fbi_file in fbi_files:
     if fbi_file:
@@ -33,8 +35,8 @@ if __name__ == '__main__':
         for record in fbi_data:
         # for rec in range(7032, 7040):
 
-            lompe_scan_plot_vectors(record, dirname)
-            lompe_scan_plot_potential_polar(record, dirname)
+            lompe_scan_plot_vectors(record, path=dirname)
+            # lompe_scan_plot_potential_polar(record, dirname)
             # lompe_scan_plot_potential(record, dirname)
             print(dt.datetime(record['scan_year'][0],
                               record['scan_month'][0],
