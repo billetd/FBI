@@ -152,7 +152,10 @@ def get_scan_times_widebeam(all_data, timerange):
 
     # Should start with the first record after the start of the timerange given
     # This avoids empty records
-    first_time = min(t for t in unique_times[0] if t > timerange[0])
+    first_time = min(
+        (dt for sublist in unique_times for dt in sublist if dt > timerange[0]),
+        default=None
+    )
     range_times = [first_time + i * scan_delta
                    for i in range(int((timerange[1] - first_time) / scan_delta) + 1)]
 
