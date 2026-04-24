@@ -135,6 +135,9 @@ def get_scan_times_widebeam(all_data, timerange):
     # Scan lengths
     diffs = [[(t2 - t1) for t1, t2 in zip(radar, radar[1:])] for radar in sorted_times]
 
+    # Remove empty lists (files with incomplete records, or single scanes
+    diffs = [sublist for sublist in diffs if sublist]
+
     # Check for data gaps, which would manifest as a diff much bigger than all the others
     # The mimimum diff should be close-ish to the average. Use that as a first "best guess"
     # Any diff that is off from 50% of the min is considered a delayed scan, and is removed when considering the avg
