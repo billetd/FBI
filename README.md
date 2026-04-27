@@ -3,6 +3,8 @@ Code for SuperDARN Borealis 3.5s integration into [lompe](https://github.com/kla
 FBI data can be obtained from [superdarn.ca](https://superdarn.ca/fbi), which can be read in with this package.
 
 # Installation
+FBI requires Python 3.11+ to work correctly (Scipy dependence conflict with pyDARN)
+
 Install with the following command:
 
 ```
