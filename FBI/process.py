@@ -16,12 +16,13 @@ import numpy as np
 from FBI.readwrite import lompe_extract, fbi_save_hdf5
 from FBI.utils import find_indexes_within_time_range
 from FBI.fitacf import get_scan_times_widebeam, all_data_make_iterable, median_filter, fitacf_get_k_vector_circle
-from FBI.fitacf import get_scan_times_old
+from FBI.fitacf import get_scan_times_old, read_fitacfs
 from pydarn.utils.coordinates import gate2geographic_location
 from FBI.grid import lompe_grid_canada
 os.environ['RAY_DEDUP_LOGS'] = '0'
 import ray
-
+import re
+from glob import glob
 
 def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_override=None, range_times=None):
     """
@@ -85,6 +86,140 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
 
     # Save as a HDF5 file
     fbi_save_hdf5(lompes, timerange, lompe_dir)
+
+
+def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: int, scandelta_override=30, med_filter=True)->None:
+    """
+    :param fitacf_files: list[str] - List containing all the fitacf files from tht fitacf's root directory
+    :param date: dt.datetime datetime object containg the current date
+    :param output_dir: str -  the directory to store FBI hdf5 files 
+    :param cores: int - Number of cores to assign for multiprocessing 
+    :param scandelta_override: int - Time in seconds to gather data around scans
+    :param med_filter: True or False - Median filter the data but putting into Lompe
+    
+    This function will find and process all fitacf files for the day specified
+    by date parameter.
+    Note: This function will error if your directory structure isn't of the form:
+    fitacfs_root/**/yyyy/mm/YYYYMMDD.HH.mm.ss.<3-letter radar code>.[a-d].fitacf.(bz2)?(where the bz2 extension is optional)
+    supports fitacf files in the naming convention of YYYYMMDD.HHmm.ss.<3-letter radar code>.[a-d].fitacf.(bz2)? 
+    """
+    
+    year,month,day = str(date.year),str(date.month),str(date.day)
+
+    pattern = r"^.+" + year + r"/" + r"0?" + month + r"/" \
+            + year + r"0?" + month + r"0?" + day \
+            + r"\.\d{2}\.?\d{2}\.\d{2}\.\w{3}\.[a-z]\.?.*$"
+    #find all the fitacf files for this date.
+    match_list = [file for file in fitacf_files if re.search(pattern, file)]
+    match_list.sort()
+    if not match_list:
+        print("No matches found! skipping...")
+        return
+    
+    #store the FBI file in a directory with the year and month information
+    if output_dir[-1] != '/': 
+        output_dir += '/'
+
+    output_dir = output_dir + year + r"/" + (("0" + month) if int(month) < 10 else month) + r"/" + (("0" + day) if int(day) < 10 else day) + r"/"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir) 
+
+    index = 0
+    time_pattern = r"\.(\d{2})\.?(\d{2})\."
+    #Find all the files with the same hour field, gather them all, organize them and process them. 
+    chunk_list = []
+    while index < len(match_list):
+        hour_match = {
+        'start_time': None,
+        'end_time': None,
+        'files': None
+        }
+        match = re.search(time_pattern, match_list[index])
+        current_hour = match.group(1)
+        hour_match['start_time'] = date.replace(hour=int(current_hour))
+
+        hour_pattern = r"\." + current_hour + "\.?\d{2}"
+        hour_match['files'] = [file for file in match_list if re.search(hour_pattern, file)]
+        index += len(hour_match['files'])
+        
+        if index < len(match_list):
+            next_hour = int(re.search(time_pattern, match_list[index]).group(1))
+            hour_match['end_time'] = date.replace(hour=next_hour)
+            chunk_list.append(hour_match)
+        else:
+            #just assume once we get here that the last time is at the end of the day.
+            end_time = date.replace(hour=23,minute=59,second=59)
+            hour_match['end_time'] = end_time
+            chunk_list.append(hour_match)
+            break
+    
+    #If we have existing files, extract the hour information, and put that in a list, then skip those hours instead of processing
+    existing_files = glob(output_dir + '**')
+
+    pattern = r"FBI_" + str(date.year) + r"0?" + str(date.month) + r"0?" + str(date.day) + r"(\d{2}).*"
+    
+    #list of existing start times for existing files
+    start_times = [int(re.search(pattern,file).group(1)) for file in existing_files]
+
+    #Process a time chunk at a time    
+    for chunk in chunk_list:
+        timerange = [chunk['start_time'],chunk['end_time']] 
+        
+        if start_times:
+            if chunk['start_time'].hour in start_times:
+                print("File with start hour already exists, skipping...")
+                continue
+            else:
+                pass
+
+        records = read_fitacfs(chunk['files'],cores=cores, start=timerange[0], end=timerange[1])
+
+        process(records,timerange,output_dir,cores=cores, scandelta_override=scandelta_override)
+        gc.collect()
+
+
+def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.datetime], cores: int, scandelta_override=30, med_filter=True)->None:
+    """
+    :param fitacfs_root: str - The root directory where the fitacf files are stored
+    :param output_dir: str - The directory to store FBI hdf5 files 
+    :param date_range: list[dt.datetime] - List containing the time interval in which to process files, must be two dt.datetime items,
+    can be the same day.
+    :param cores: int - Number of cores to assign for multiprocessing
+    :param scandelta_override: int - Time in seconds to gather data around scans
+    :param med_filter: True or False - Median filter the data but putting into Lompe
+    
+    This function will read in fitacf_files and process them into FBI hdf5 files in the date interval specified by date_range. 
+    """
+    if len(date_range) != 2:
+        raise Exception("Date range must be a two element list, even if it's just the same date i.e [dt.datetime(yyyy,mm,dd),dt.datetime(yyyy,mm,dd)]")
+
+
+    if fitacfs_root[-1] != '/':
+        fitacfs_root += '/'
+
+    fitacf_files = glob(fitacfs_root + '**', recursive=True)
+
+    if not fitacf_files:
+        raise Exception("Failed to search fitacf files root. Check for correct directory or permissions.")
+     
+    #search for days within timerange and gather them into fitacf_files - list[str] 
+    dates = []
+    current_date = date_range[0]
+    end_date = date_range[1]
+   
+    if end_date < current_date:
+        raise Exception("The end of the date_range is less than the beginning!")
+    
+
+    while current_date < end_date + dt.timedelta(days=1):
+        dates.append(current_date)
+        current_date += dt.timedelta(days=1)
+    
+    
+    for date in dates:
+        process_date(fitacf_files, output_dir, date, cores, scandelta_override=scandelta_override, med_filter=med_filter)
+
+
 
 
 # Must comment out this line if debugging
