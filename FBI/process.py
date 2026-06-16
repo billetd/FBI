@@ -88,7 +88,8 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     fbi_save_hdf5(lompes, timerange, lompe_dir)
 
 
-def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: int, scandelta_override=30, med_filter=True)->None:
+def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: int, scandelta_override=6,
+                 med_filter=True)->None:
     """
     :param fitacf_files: list[str] - List containing all the fitacf files from tht fitacf's root directory
     :param date: dt.datetime datetime object containg the current date
@@ -138,7 +139,7 @@ def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: i
         current_hour = match.group(1)
         hour_match['start_time'] = date.replace(hour=int(current_hour))
 
-        hour_pattern = r"\." + current_hour + "\.?\d{2}"
+        hour_pattern = r"\." + current_hour + r"\.?\d{2}"
         hour_match['files'] = [file for file in match_list if re.search(hour_pattern, file)]
         index += len(hour_match['files'])
         
@@ -172,13 +173,15 @@ def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: i
             else:
                 pass
 
-        records = read_fitacfs(chunk['files'],cores=cores, start=timerange[0], end=timerange[1])
+        records = read_fitacfs(chunk['files'], cores=cores, start=timerange[0], end=timerange[1])
 
-        process(records,timerange,output_dir,cores=cores, scandelta_override=scandelta_override)
+        process(records, timerange, output_dir, cores=cores, scandelta_override=scandelta_override,
+                med_filter=med_filter)
         gc.collect()
 
 
-def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.datetime], cores: int, scandelta_override=30, med_filter=True)->None:
+def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.datetime], cores: int, scandelta_override=6,
+                  med_filter=True)->None:
     """
     :param fitacfs_root: str - The root directory where the fitacf files are stored
     :param output_dir: str - The directory to store FBI hdf5 files 
