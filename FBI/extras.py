@@ -29,12 +29,11 @@ def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: i
 
     pattern = r"^.+" + year + r"/" + r"0?" + month + r"/" \
             + year + r"0?" + month + r"0?" + day \
-            + r"\.\d{2}\.?\d{2}\.\d{2}\.\w{3}\.[a-z]\.?.*$"
+            + r"\.\d{2}\.?\d{2}\.\d{2}\.\w{3}\.[a-z]\.?.fitacf.*$"
     #find all the fitacf files for this date.
     match_list = [file for file in fitacf_files if re.search(pattern, file)]
     match_list.sort()
-    
-    
+        
     if not match_list:
         print("No matches found! skipping...")
         return
@@ -44,7 +43,7 @@ def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: i
         output_dir += '/'
 
     
-    output_dir = output_dir + year + r"/" + (("0" + month) if int(month) < 10 else month) + r"/" + (("0" + day) if int(day) < 10 else day) + r"/"
+    output_dir = output_dir + year + r"/" + (("0" + month) if int(month) < 10 else month) + r"/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir) 
 
@@ -104,12 +103,19 @@ def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: i
         hour += hour_span
     
     #If we have existing files, extract the hour information, and put that in a list, then skip those hours instead of processing
-    existing_files = glob(output_dir + '**')
+
+    existing_files = glob(output_dir + '*.hdf5')
 
     pattern = r"FBI_" + str(date.year) + r"0?" + str(date.month) + r"0?" + str(date.day) + r"(\d{2}).*"
     
     #list of existing start times for existing files
-    start_times = [int(re.search(pattern,file).group(1)) for file in existing_files]
+    start_times = [] 
+    for file in existing_files:
+        match=re.search(pattern,file)
+        if not match:
+            continue
+        else:
+            start_times.append(int(match.group(1)))
 
     #Process a time chunk at a time    
     for chunk in chunk_list:
@@ -131,7 +137,8 @@ def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: i
 
 def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.datetime], cores: int, scandelta_override=6, med_filter=True)->None:
     """
-    :param fitacfs_root: str - The root directory where the fitacf files are stored
+    :param fitacfs_root: str - The root directory where the fitacf files are stored make sure your directory structure is
+    of the form: /fitacfs_root/YYYY/MM/
     :param output_dir: str - The directory to store FBI hdf5 files 
     :param date_range: list[dt.datetime] - List containing the time interval in which to process files, must be two dt.datetime items,
     can be the same day.
@@ -148,10 +155,6 @@ def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.dateti
     if fitacfs_root[-1] != '/':
         fitacfs_root += '/'
 
-    fitacf_files = glob(fitacfs_root + '**', recursive=True)
-
-    if not fitacf_files:
-        raise Exception("Failed to search fitacf files root. Check for correct directory or permissions.")
      
     #search for days within timerange and gather them into fitacf_files - list[str] 
     dates = []
@@ -166,8 +169,15 @@ def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.dateti
         dates.append(current_date)
         current_date += dt.timedelta(days=1)
     
-    
     for date in dates:
+        year,month = str(date.year),str(date.month)
+
+        fitacf_files = glob(fitacfs_root + year + r"/" + (("0" + month) if int(month) < 10 else month) + r"/*")
+
+        if not fitacf_files:
+            print("Files not found, continuing...") 
+            continue 
+
         process_date(fitacf_files, output_dir, date, cores, scandelta_override=scandelta_override, med_filter=med_filter)
 
 
