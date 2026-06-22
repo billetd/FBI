@@ -2,21 +2,21 @@ from glob import glob
 import re
 import gc
 import os
-
 import datetime as dt
-
 from FBI.fitacf import read_fitacfs
 from FBI.process import process
 
-def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: int, hour_span=2 ,scandelta_override=6, med_filter=True)->None:
+def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: int, hour_span=2, scandelta_override=6,
+                 med_filter=True)->None:
     """
     :param fitacf_files: list[str] - List containing all the fitacf files from tht fitacf's root directory
     :param output_dir: str -  the directory to store FBI hdf5 files 
     :param date: dt.datetime datetime object containg the current date
     :param cores: int - Number of cores to assign for multiprocessing 
-    :param hour_span: int - The time interval in which to gather fitacf data to extract records from. You should probably match
-    it to the length of the scan for the files to be processed, most common would be two hour files(scanning time). 
+    :param hour_span: int - The time interval to chunk up the files into, in hours. Works best when matching the
+    nominal cadence of the fitacf files. Default is 2 hours, which is the typical time interval.
     :param scandelta_override: int - Time in seconds to gather data around scans :param med_filter: True or False - Median filter the data but putting into Lompe
+    :param scandelta_override: bool - Median filter the data but putting into Lompe
 
     This function will find and process all fitacf files for the day specified
     by date parameter.
@@ -130,12 +130,13 @@ def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: i
 
         records = read_fitacfs(chunk['files'],cores=cores, start=timerange[0], end=timerange[1])
 
-        process(records,timerange,output_dir,cores=cores, scandelta_override=scandelta_override, med_filter=med_filter)
+        process(records, timerange, output_dir, cores=cores, scandelta_override=scandelta_override, med_filter=med_filter)
         gc.collect()
 
 
 
-def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.datetime], cores: int, scandelta_override=6, med_filter=True)->None:
+def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.datetime], cores: int, scandelta_override=6,
+                  med_filter=True)->None:
     """
     :param fitacfs_root: str - The root directory where the fitacf files are stored make sure your directory structure is
     of the form: /fitacfs_root/YYYY/MM/
@@ -144,7 +145,7 @@ def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.dateti
     can be the same day.
     :param cores: int - Number of cores to assign for multiprocessing
     :param scandelta_override: int - Time in seconds to gather data around scans
-    :param med_filter: True or False - Median filter the data but putting into Lompe
+    :param med_filter: bool - Median filter the data but putting into Lompe
     
     This function will read in fitacf_files and process them into FBI hdf5 files in the date interval specified by date_range. 
     """
