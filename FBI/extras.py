@@ -33,7 +33,6 @@ def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: i
     #find all the fitacf files for this date.
     match_list = [file for file in fitacf_files if re.search(pattern, file)]
     match_list.sort()
-    import pdb; pdb.set_trace()
         
     if not match_list:
         print("No matches found! skipping...")
