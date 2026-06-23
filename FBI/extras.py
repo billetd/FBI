@@ -26,13 +26,14 @@ def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: i
     """
     
     year,month,day = str(date.year),str(date.month),str(date.day)
-
     pattern = r"^.+" + year + r"/" + r"0?" + month + r"/" \
             + year + r"0?" + month + r"0?" + day \
-            + r"\.\d{2}\.?\d{2}\.\d{2}\.\w{3}\.[a-z]\.?.fitacf.*$"
+            + r"\.\d{2}\.?\d{2}\.\d{2}\.\w{3}\.[a-z]\.?.*$"
+
     #find all the fitacf files for this date.
     match_list = [file for file in fitacf_files if re.search(pattern, file)]
     match_list.sort()
+    import pdb; pdb.set_trace()
         
     if not match_list:
         print("No matches found! skipping...")
@@ -173,8 +174,7 @@ def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.dateti
     for date in dates:
         year,month = str(date.year),str(date.month)
 
-        fitacf_files = glob(fitacfs_root + year + r"/" + (("0" + month) if int(month) < 10 else month) + r"/*")
-
+        fitacf_files = glob(fitacfs_root + year + r"/" + (("0" + month) if int(month) < 10 else month) + r"/*.fitacf.*")
         if not fitacf_files:
             print("Files not found, continuing...") 
             continue 
