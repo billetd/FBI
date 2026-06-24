@@ -78,6 +78,9 @@ def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: i
     index,hour = 0,0
 
     while index < len(match_list):
+        if hour >= 24:
+            break
+
         hour_match = {
         'start_time': date.replace(hour=hour),
         'end_time': None,
