@@ -108,7 +108,10 @@ def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter,
 
     if sd_data is not None:  # Make sure there's data before continuing
         # Run lompe
-        scan_lompe = run_lompe_model(sd_data, model)
+        try:
+            scan_lompe = run_lompe_model(sd_data, model)
+        except IndexError:
+            scan_lompe = None
 
         # Collect the model data to save
         if scan_lompe is not None:  # I had the run break on inversion randomly once. Not sure why.
@@ -120,6 +123,7 @@ def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter,
             print('Scan complete: ' + scan_time.strftime("%Y-%m-%d %H:%M:%S.%f"))
 
             return lompe_data
+    return None
 
 
 def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter):
