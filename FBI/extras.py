@@ -134,6 +134,7 @@ def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: i
         records = read_fitacfs(chunk['files'],cores=cores, start=timerange[0], end=timerange[1])
 
         process(records, timerange, output_dir, cores=cores, scandelta_override=scandelta_override, med_filter=med_filter)
+        del records
         gc.collect()
 
 
