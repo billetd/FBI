@@ -52,6 +52,50 @@ def lompe_scan_plot_vectors(lompe, path=None, save=True):
     else:
         print('Allready processed: ' + save_path)
 
+def lompe_scan_plot_vecs_polar(lompe, path, boundary=True save=True):
+    """
+
+    :param path:
+    :param lompe:
+    :param save:
+    :return:
+    """
+
+    scan_time = dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
+                            lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
+
+    if path is not None:
+        save_path = path + scan_time.strftime("polar_pot_%Y-%m-%d %H%M%S") + '.png'
+        if pathy.isfile(save_path) is False:  # Check plot doesn't already exist
+            go = True
+        else:
+            go = False
+    else:
+        go = True
+
+    if go is True:
+        # Apex coordinate stuff
+        apex = apexpy.Apex(scan_time, refh=300)
+
+        # Global polar axis
+        ax, coord, fig = get_polar_axis(scan_time, apex)
+        plt.title(scan_time.strftime("%Y-%m-%d %H:%M:%S"))
+
+        # Locations of SuperDARN data
+        plot_vecs_model_darn_grid(lompe, ax, apex=apex, time=scan_time, coord=coord)
+
+        # Boundary box
+        if boundary=True:
+            plot_boundary_box(lompe, ax, apex, scan_time)
+        
+        if save is True:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close('all')
+            return None, None, None, None
+        else:
+            return fig, ax, None, plt
+    else:
+        print('Allready processed: ' + save_path)
 
 def lompe_scan_plot_potential(lompe, path, save=True):
     """
