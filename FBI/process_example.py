@@ -5,7 +5,7 @@ Example code for processing input fitacf data into lompe outputs
 import datetime as dt
 import glob
 import FBI.fitacf as fitacf
-import FBI.process as process
+import FBI.process_new as process
 import gc
 
 def simple_process():
