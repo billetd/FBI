@@ -377,7 +377,7 @@ def fitacf_get_k_vector_circle(radlat, radlon, radmlat, radmlon, lat, lon, mlat,
     ln_current = np.sign(v_los) * np.cos(np.radians(az))
 
     # Magnetic
-    api = 4 * math.atan(1.0)
+    api = math.pi
     aside = 90 - radmlat
     cside = 90 - mlat
     Bangle = radmlon - mlon
