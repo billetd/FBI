@@ -236,10 +236,11 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
 
         # Station ID
         stid = all_data[file_index][0]['stid']
+        stid_enum = pydarn.RadarID(stid)
 
         # Get position of radar in geographic from hdw files in pyDARN, convert to magnetic
-        radlat = pydarn.SuperDARNRadars.radars[pydarn.RadarID(stid)].hardware_info.geographic.lat
-        radlon = pydarn.SuperDARNRadars.radars[pydarn.RadarID(stid)].hardware_info.geographic.lon
+        radlat = pydarn.SuperDARNRadars.radars[stid_enum].hardware_info.geographic.lat
+        radlon = pydarn.SuperDARNRadars.radars[stid_enum].hardware_info.geographic.lon
         radmlat, radmlon = apex.geo2apex(radlat, radlon, 300)
 
         # Get the indexes for the records which are within half of scan_time
@@ -300,7 +301,7 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
 
                     # Get coordinates of this beam/gate
                     lat, lon = gate2geographic_location(
-                        stid=pydarn.RadarID(stid), beam=beam, range_gate=gate,
+                        stid=stid_enum, beam=beam, range_gate=gate,
                         height=300, center=True, rsep=rsep, frang=frang
                     )
                     mlat, mlon = apex.geo2apex(lat, lon, 300)
