@@ -73,6 +73,8 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     # Only initialize Ray if it isn't already running.
     if not ray.is_initialized():
         ray.init(num_cpus=cores, include_dashboard=False, object_store_memory=2 * 1024**3)
+        # For debugging. Comment out when not in use
+        # ray.init(num_cpus=1, include_dashboard=False, object_store_memory=2 * 1024 ** 3, local_mode=True)
 
     scan_delta_id     = ray.put(scan_delta)
     darn_grid_stuff_id = ray.put(darn_grid_stuff)
@@ -268,6 +270,8 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
 
             gflg = all_data[file_index][record]['gflg']
 
+            beam = all_data[file_index][record]['bmnum']
+
             # Range seperation and frang
             try:
                 rsep = all_data[file_index][record]['rsep']
@@ -280,7 +284,12 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
             except KeyError:
                 frang = 180
 
-            beam = all_data[file_index][record]['bmnum']
+            # Get coordinates of all beams and gates
+            lat, lon = gate2geographic_location(
+                stid=stid_enum, beam=np.full(slist.size, beam), range_gate=slist,
+                height=300, center=True, rsep=rsep, frang=frang
+            )
+            mlat, mlon = apex.geo2apex(lat, lon, 300)
 
             # Iterate over the gates
             for j, gate in enumerate(slist):
@@ -299,13 +308,6 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
                     if not vel_range:
                         continue
 
-                    # Get coordinates of this beam/gate
-                    lat, lon = gate2geographic_location(
-                        stid=stid_enum, beam=beam, range_gate=gate,
-                        height=300, center=True, rsep=rsep, frang=frang
-                    )
-                    mlat, mlon = apex.geo2apex(lat, lon, 300)
-
                     # Kvectors aren't in fitACF files, so we need to calculate it ourselves
                     # azm = fitacf_get_k_vector(stid, lat, lon, all_data[file_index][record]['v'][j])
                     # Get the unit vectors in east and west directions
@@ -313,15 +315,15 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
                     (le_current, ln_current, le_mag_current, ln_mag_current,
                      ve_geo_current, vn_geo_current,  # returned by the function but not stored
                      ve_mag_current, vn_mag_current) = fitacf_get_k_vector_circle(
-                        radlat, radlon, radmlat, radmlon, lat, lon, mlat, mlon, vel_range
+                        radlat, radlon, radmlat, radmlon, lat[j], lon[j], mlat[j], mlon[j], vel_range
                     )
 
                     # Append to returned lists
                     rid.append(all_data[file_index][record]['stid'])
-                    glat.append(lat)
-                    glon.append(lon)
-                    mlats.append(mlat)
-                    mlons.append(mlon)
+                    glat.append(lat[j])
+                    glon.append(lon[j])
+                    mlats.append(mlat[j])
+                    mlons.append(mlon[j])
                     vlos.append(abs(vel_range)) # Needs to be magnitude of the velocity, sign is handled by azimuth
                     vlos_err.append(abs(all_data[file_index][record]['v_e'][j]))
                     le.append(le_current)
