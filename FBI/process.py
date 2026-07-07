@@ -236,6 +236,12 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
     ve_mag, vn_mag = [], []
     rid = []
 
+    # For median filtering
+    weighting_array = np.array([[[1, 1, 1], [1, 2, 1], [1, 1, 1]],
+                                [[2, 2, 2], [2, 4, 2], [2, 2, 2]],
+                                [[1, 1, 1], [1, 2, 1], [1, 1, 1]]
+                                ])
+
     for file_index in range(len(all_data)):
 
         # Station ID
@@ -308,8 +314,8 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
                 if gflg[j] == 0 and abs(v[j]) <= 2000 and gate > 10:
 
                     # Median filtering
-                    if med_filter is True:
-                        vel_range = median_filter(all_data[file_index], record, max_beams, gate)
+                    if med_filter:
+                        vel_range = median_filter(weighting_array, all_data[file_index], record, max_beams, gate)
                     else:
                         vel_range = v[j]
 

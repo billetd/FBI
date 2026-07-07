@@ -236,9 +236,10 @@ def get_scan_times_old(all_data, timerange):
     return scan_times, range_times, scan_delta
 
 
-def median_filter(fitacf_data, record, max_beams, gate):
+def median_filter(weighting_array, fitacf_data, record, max_beams, gate):
     """
 
+    :param weighting_array:
     :param fitacf_data:
     :param record:
     :param max_beams:
@@ -249,15 +250,6 @@ def median_filter(fitacf_data, record, max_beams, gate):
     # Score to beat when summing scatter in range gates. Will be halved if on a beam/range edge.
     weight_score = 24
     # weight_score = 6
-
-    weighting_array = np.array([[[1, 1, 1], [1, 2, 1], [1, 1, 1]],
-                                [[2, 2, 2], [2, 4, 2], [2, 2, 2]],
-                                [[1, 1, 1], [1, 2, 1], [1, 1, 1]]
-                                ])
-    # weighting_array = np.array([[[1, 2, 1], [2, 3, 2], [1, 2, 1]],
-    #                             [[2, 3, 2], [3, 5, 3], [2, 3, 2]],
-    #                             [[1, 2, 1], [2, 3, 2], [1, 2, 1]]
-    #                             ])
 
     # Total number of records in this file
     n_recs = len(fitacf_data)
@@ -313,7 +305,7 @@ def median_filter(fitacf_data, record, max_beams, gate):
                         slist_indexes = np.where(np.isin(current_beam_slist, gates))[0]
                         gscat = np.where(current_beam_gscat[slist_indexes] == 0)
                         scatter[isin_indexes[gscat], beam_counter] = 1  # Indexing the current beam
-                        vels = np.append(vels, fitacf_data[scan + beam_diff]['v'][slist_indexes[gscat]])
+                        vels.extend(fitacf_data[scan + beam_diff]['v'][slist_indexes[gscat]])
 
             # Sum the weights and add it to the counter
             cumulative_weight += np.sum(scatter * weighting_array[scan_counter])
