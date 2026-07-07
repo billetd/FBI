@@ -37,7 +37,7 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     """
 
 
-    # If no "range_times"  is given, work it out based on input data
+    # If no "range_times" is given, work it out based on input data
     # May produce silly scans if there is a mix of normal scan and other modes. Be cautious and only use
     # if you know what data is going in.
     if not range_times:
@@ -149,10 +149,10 @@ def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter,
     :param darn_grid_stuff:
     :param med_filter:
     :param model:
-    :param apex:
     :return:
     """
 
+    # apex = apexpy.Apex(scan_time, refh=300)
     # Initialise apex only once per ray worker and hold on to it.
     # This is because the apxex object can't be serialised with ray.put()
     # Do this minimizes the number of apex intialisations
@@ -182,7 +182,7 @@ def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter,
             print('Scan complete: ' + scan_time.strftime("%Y-%m-%d %H:%M:%S.%f"))
             return lompe_data
 
-        del sd_data # No longer needed
+        del sd_data, # No longer needed
 
 
     return None
@@ -228,30 +228,25 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
     """
 
     # Arrays that will hold the important parameters
-    glon     = []
-    glat     = []
-    mlons    = []
-    mlats    = []
-    vlos     = []
-    vlos_err = []
-    le       = []
-    ln       = []
-    le_mag   = []
-    ln_mag   = []
-    ve_mag   = []
-    vn_mag   = []
-    rid      = []
+    glon, glat   = [], []
+    mlons, mlats = [], []
+    vlos, vlos_err = [], []
+    le, ln         = [], []
+    le_mag, ln_mag = [], []
+    ve_mag, vn_mag = [], []
+    rid = []
 
     for file_index in range(len(all_data)):
 
         # Station ID
         stid = all_data[file_index][0]['stid']
-        stid_enum = pydarn.RadarID(stid)
 
         # Get position of radar in geographic from hdw files in pyDARN, convert to magnetic
-        radlat = pydarn.SuperDARNRadars.radars[stid_enum].hardware_info.geographic.lat
-        radlon = pydarn.SuperDARNRadars.radars[stid_enum].hardware_info.geographic.lon
-        radmlat, radmlon = apex.geo2apex(radlat, radlon, 300)
+        radar_id = pydarn.RadarID(stid)
+        radlat = pydarn.SuperDARNRadars.radars[radar_id].hardware_info.geographic.lat
+        radlon = pydarn.SuperDARNRadars.radars[radar_id].hardware_info.geographic.lon
+        _rmlat, _rmlon = apex.geo2apex(radlat, radlon, 300)
+        radmlat, radmlon = float(_rmlat), float(_rmlon)  # ensure plain floats for math.*
 
         # Get the indexes for the records which are within half of scan_time
         record_times = [
@@ -266,6 +261,12 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
         times_in_scan = find_indexes_within_time_range(record_times, scan_time, catchtime=scan_delta / 2)
         max_beams = max([entry["bmnum"] for entry in all_data[file_index]]) + 1
 
+        # Collect all valid gate positions and vels in temp arrays
+        _lats, _lons   = [], []
+        _vlos_signed   = []   # signed: needed so batch function can embed direction in le/ln
+        _vlos_mag      = []   # magnitude: what Lompe actually receives
+        _vlos_err      = []
+
         for record in times_in_scan:
 
             # Ranges with data in it, minus ground scatter
@@ -277,7 +278,6 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
                 continue
 
             gflg = all_data[file_index][record]['gflg']
-
             beam = all_data[file_index][record]['bmnum']
 
             # Range seperation and frang
@@ -294,52 +294,68 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
 
             # Get coordinates of all beams and gates
             lat, lon = gate2geographic_location(
-                stid=stid_enum, beam=np.full(slist.size, beam), range_gate=slist,
+                stid=radar_id, beam=np.full(slist.size, beam), range_gate=slist,
                 height=300, center=True, rsep=rsep, frang=frang
             )
-            mlat, mlon = apex.geo2apex(lat, lon, 300)
+
+            v    = all_data[file_index][record]['v']
+            v_e  = all_data[file_index][record]['v_e']
 
             # Iterate over the gates
             for j, gate in enumerate(slist):
                 # Only continue if not ground scatter, velocity is below 2000m/s, and range gates above 10
                 # This removes most erroneous data and near-range (E-region) echos
-                if gflg[j] == 0 and abs(all_data[file_index][record]['v'][j]) <= 2000 and gate > 10:
+                if gflg[j] == 0 and abs(v[j]) <= 2000 and gate > 10:
 
                     # Median filtering
                     if med_filter is True:
                         vel_range = median_filter(all_data[file_index], record, max_beams, gate)
                     else:
-                        vel_range = all_data[file_index][record]['v'][j]
+                        vel_range = v[j]
 
                     # The median filter can fail if unreliable scatter is found
                     # If so, skip this iteration
                     if not vel_range:
                         continue
 
-                    # Kvectors aren't in fitACF files, so we need to calculate it ourselves
-                    # azm = fitacf_get_k_vector(stid, lat, lon, all_data[file_index][record]['v'][j])
-                    # Get the unit vectors in east and west directions
-                    # le_current, ln_current = los_azimuth2en(azm)
-                    (le_current, ln_current, le_mag_current, ln_mag_current,
-                     ve_geo_current, vn_geo_current,  # returned by the function but not stored
-                     ve_mag_current, vn_mag_current) = fitacf_get_k_vector_circle(
-                        radlat, radlon, radmlat, radmlon, lat[j], lon[j], mlat[j], mlon[j], vel_range
-                    )
+                    # Store positions and velocity info
+                    _lats.append(lat[j])
+                    _lons.append(lon[j])
+                    _vlos_signed.append(vel_range)
+                    _vlos_mag.append(abs(vel_range))
+                    _vlos_err.append(abs(v_e[j]))
 
-                    # Append to returned lists
-                    rid.append(all_data[file_index][record]['stid'])
-                    glat.append(lat[j])
-                    glon.append(lon[j])
-                    mlats.append(mlat[j])
-                    mlons.append(mlon[j])
-                    vlos.append(abs(vel_range)) # Needs to be magnitude of the velocity, sign is handled by azimuth
-                    vlos_err.append(abs(all_data[file_index][record]['v_e'][j]))
-                    le.append(le_current)
-                    ln.append(ln_current)
-                    le_mag.append(le_mag_current)
-                    ln_mag.append(ln_mag_current)
-                    ve_mag.append(ve_mag_current)
-                    vn_mag.append(vn_mag_current)
+        if not _lats:
+            continue
+
+        # Mag conversion
+        _lats_arr = np.array(_lats)
+        _lons_arr = np.array(_lons)
+        _mlats_arr, _mlons_arr = apex.geo2apex(_lats_arr, _lons_arr, 300)
+        _vlos_arr = np.array(_vlos_signed)
+
+        # Get kvectors
+        le_arr, ln_arr, le_mag_arr, ln_mag_arr, _, _, ve_mag_arr, vn_mag_arr = \
+            fitacf_get_k_vector_circle(
+                radlat, radlon, radmlat, radmlon,
+                _lats_arr, _lons_arr, _mlats_arr, _mlons_arr, _vlos_arr
+            )
+
+        # Add to output lists
+        n = len(_lats)
+        rid.extend([stid] * n)
+        glat.extend(_lats)
+        glon.extend(_lons)
+        mlats.extend(_mlats_arr.tolist())
+        mlons.extend(_mlons_arr.tolist())
+        vlos.extend(_vlos_mag)
+        vlos_err.extend(_vlos_err)
+        le.extend(le_arr.tolist())
+        ln.extend(ln_arr.tolist())
+        le_mag.extend(le_mag_arr.tolist())
+        ln_mag.extend(ln_mag_arr.tolist())
+        ve_mag.extend(ve_mag_arr.tolist())
+        vn_mag.extend(vn_mag_arr.tolist())
 
     return (np.array(glat), np.array(glon), np.array(mlats), np.array(mlons),
             np.array(le), np.array(ln), np.array(le_mag), np.array(ln_mag),

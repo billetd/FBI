@@ -325,86 +325,76 @@ def median_filter(fitacf_data, record, max_beams, gate):
         return []
 
 
-def fitacf_get_k_vector_circle(radlat, radlon, radmlat, radmlon, lat, lon, mlat, mlon, v_los):
-
-    """
-    :param radlat::
-    :param radlon:
-    :param radmlat::
-    :param radmlon:
-    :param lat:
-    :param lon:
-    :param mlat:
-    :param mlon:
-    :param v_los:
-    :return:
+def fitacf_get_k_vector_circle(radlat, radlon, radmlat, radmlon,
+                              lats, lons, mlats, mlons, vlos):
     """
 
-    # Graciously copied from Evan's code (invmag.pro)
+    :param radlat:  float  - radar geographic latitude
+    :param radlon:  float  - radar geographic longitude
+    :param radmlat: float  - radar magnetic latitude
+    :param radmlon: float  - radar magnetic longitude
+    :param lats:    ndarray - gate geographic latitudes
+    :param lons:    ndarray - gate geographic longitudes
+    :param mlats:   ndarray - gate magnetic latitudes
+    :param mlons:   ndarray - gate magnetic longitudes
+    :param vlos:    ndarray - signed line-of-sight velocities (m/s)
+    :return: le, ln, le_mag, ln_mag, ve_geo, vn_geo, ve_mag, vn_mag — all ndarray
+    """
+
+    # Graciously adapted from Evan's code (invmag.pro), adding vectorisation
+
     # Geographic
-    api = 4 * math.atan(1.0)
-    aside = 90 - radlat
-    cside = 90 - lat
-    Bangle = radlon - lon
+    aside = 90.0 - radlat
+    cos_a = math.cos(math.radians(aside))
+    sin_a = math.sin(math.radians(aside))
+    cside = 90.0 - lats
+    Bangle = radlon - lons
 
     # Haversine formula
-    arg = (math.cos(aside * api / 180.0) * math.cos(cside * api / 180.0) +
-           math.sin(aside * api / 180.0) * math.sin(cside * api / 180.0) * math.cos(Bangle * api / 180.0)
-           )
-    bside = math.acos(arg) * 180.0 / api
+    arg = (cos_a * np.cos(np.radians(cside))
+           + sin_a * np.sin(np.radians(cside)) * np.cos(np.radians(Bangle)))
+    arg = np.clip(arg, -1.0, 1.0)  # guard against float rounding outside [-1, 1]
+    bside = np.degrees(np.arccos(arg))
 
-    arg2 = ((math.cos(aside * api / 180.0) - math.cos(bside * api / 180.0) * math.cos(cside * api / 180.0)) /
-            (math.sin(bside * api / 180.0) * math.sin(cside * api / 180.0)))
+    numer = cos_a - np.cos(np.radians(bside)) * np.cos(np.radians(cside))
+    denom = np.sin(np.radians(bside)) * np.sin(np.radians(cside))
+    denom = np.where(np.abs(denom) < 1e-10, 1e-10, denom)  # guard against gate-at-radar
+    arg2 = np.clip(numer / denom, -1.0, 1.0)
+    Aangle_geo = np.degrees(np.arccos(arg2))
+    az_geo = np.where(Bangle < 0, -Aangle_geo, Aangle_geo)
+    az_geo = np.where(np.isnan(az_geo), 0.0, az_geo)
 
-    Aangle = math.acos(arg2) * 180.0 / api
+    le = np.sign(vlos) * np.sin(np.radians(az_geo))
+    ln = np.sign(vlos) * np.cos(np.radians(az_geo))
+    ve_geo = vlos * np.sin(np.radians(az_geo))
+    vn_geo = vlos * np.cos(np.radians(az_geo))
 
-    if Bangle < 0:
-        Aangle = -Aangle
+    # Same but in magnetic
+    aside_m = 90.0 - radmlat
+    cos_am = math.cos(math.radians(aside_m))
+    sin_am = math.sin(math.radians(aside_m))
+    cside_m = 90.0 - mlats
+    Bangle_m = radmlon - mlons
 
-    az = Aangle
+    # Haversine
+    arg_m = (cos_am * np.cos(np.radians(cside_m))
+             + sin_am * np.sin(np.radians(cside_m)) * np.cos(np.radians(Bangle_m)))
+    arg_m = np.clip(arg_m, -1.0, 1.0)
+    bside_m = np.degrees(np.arccos(arg_m))
 
-    # Check for cases when az = NAN rather than zero
-    if math.isnan(az) is True:
-        az = 0
+    numer_m = cos_am - np.cos(np.radians(bside_m)) * np.cos(np.radians(cside_m))
+    denom_m = np.sin(np.radians(bside_m)) * np.sin(np.radians(cside_m))
+    denom_m = np.where(np.abs(denom_m) < 1e-10, 1e-10, denom_m)
+    arg2_m = np.clip(numer_m / denom_m, -1.0, 1.0)
+    Aangle_mag = np.degrees(np.arccos(arg2_m))
+    az_mag = np.where((Bangle_m < 0) & (np.abs(Bangle_m) < 180), -Aangle_mag, Aangle_mag)
+    az_mag = np.where(np.isnan(az_mag), 0.0, az_mag) # Check for cases when az = NAN rather than zero
 
-    # v_e = v_los * np.sin(np.radians(az))  # Negative because positive towards radar
-    # v_n = v_los * np.cos(np.radians(az))
-    # kvect = np.degrees(math.atan2(v_e, v_n))
+    le_mag = np.sign(vlos) * np.sin(np.radians(az_mag))
+    ln_mag = np.sign(vlos) * np.cos(np.radians(az_mag))
+    ve_mag = vlos * np.sin(np.radians(az_mag))
+    vn_mag = vlos * np.cos(np.radians(az_mag))
 
-    ve_geo = v_los * np.sin(np.radians(az))
-    vn_geo = v_los * np.cos(np.radians(az))
-    le_current = np.sign(v_los) * np.sin(np.radians(az))
-    ln_current = np.sign(v_los) * np.cos(np.radians(az))
+    return le, ln, le_mag, ln_mag, ve_geo, vn_geo, ve_mag, vn_mag
 
-    # Magnetic
-    api = math.pi
-    aside = 90 - radmlat
-    cside = 90 - mlat
-    Bangle = radmlon - mlon
 
-    # Haversine formula
-    arg = (math.cos(aside * api / 180.0) * math.cos(cside * api / 180.0) +
-           math.sin(aside * api / 180.0) * math.sin(cside * api / 180.0) * math.cos(Bangle * api / 180.0)
-           )
-    bside = math.acos(arg) * 180.0 / api
-
-    arg2 = ((math.cos(aside * api / 180.0) - math.cos(bside * api / 180.0) * math.cos(cside * api / 180.0)) /
-            (math.sin(bside * api / 180.0) * math.sin(cside * api / 180.0)))
-
-    Aangle = math.acos(arg2) * 180.0 / api
-
-    if Bangle < 0 and abs(Bangle) < 180:
-        Aangle = -Aangle
-
-    az = Aangle
-
-    # Check for cases when az = NAN rather than zero
-    if math.isnan(az) is True:
-        az = 0
-
-    ve_mag = v_los * np.sin(np.radians(az))
-    vn_mag = v_los * np.cos(np.radians(az))
-    le_mag_current = np.sign(v_los) * np.sin(np.radians(az))
-    ln_mag_current = np.sign(v_los) * np.cos(np.radians(az))
-
-    return le_current, ln_current, le_mag_current, ln_mag_current, ve_geo, vn_geo, ve_mag, vn_mag
