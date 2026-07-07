@@ -177,7 +177,7 @@ def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.dateti
     for date in dates:
         year,month = str(date.year),str(date.month)
 
-        fitacf_files = glob(fitacfs_root + year + r"/" + (("0" + month) if int(month) < 10 else month) + r"/*.fitacf.*")
+        fitacf_files = glob(fitacfs_root + year + r"/" + (("0" + month) if int(month) < 10 else month) + r"/*.fitacf*")
         if not fitacf_files:
             print("Files not found, continuing...") 
             continue 

@@ -72,7 +72,7 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
 
     # Only initialize Ray if it isn't already running.
     if not ray.is_initialized():
-        ray.init(num_cpus=cores, include_dashboard=False)
+        ray.init(num_cpus=cores, include_dashboard=False, object_store_memory=2 * 1024**3)
 
     scan_delta_id     = ray.put(scan_delta)
     darn_grid_stuff_id = ray.put(darn_grid_stuff)
@@ -237,7 +237,12 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
         # Station ID
         stid = all_data[file_index][0]['stid']
 
-        # Get the indexes for the records which are within half of of scan_time
+        # Get position of radar in geographic from hdw files in pyDARN, convert to magnetic
+        radlat = pydarn.SuperDARNRadars.radars[pydarn.RadarID(stid)].hardware_info.geographic.lat
+        radlon = pydarn.SuperDARNRadars.radars[pydarn.RadarID(stid)].hardware_info.geographic.lon
+        radmlat, radmlon = apex.geo2apex(radlat, radlon, 300)
+
+        # Get the indexes for the records which are within half of scan_time
         record_times = [
             dt.datetime(
                 all_data[file_index][x]['time.yr'], all_data[file_index][x]['time.mo'],
@@ -307,7 +312,7 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
                     (le_current, ln_current, le_mag_current, ln_mag_current,
                      ve_geo_current, vn_geo_current,  # returned by the function but not stored
                      ve_mag_current, vn_mag_current) = fitacf_get_k_vector_circle(
-                        apex, stid, lat, lon, mlat, mlon, vel_range
+                        radlat, radlon, radmlat, radmlon, lat, lon, mlat, mlon, vel_range
                     )
 
                     # Append to returned lists

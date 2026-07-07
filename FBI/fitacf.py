@@ -325,11 +325,13 @@ def median_filter(fitacf_data, record, max_beams, gate):
         return []
 
 
-def fitacf_get_k_vector_circle(apex, stid, lat, lon, mlat, mlon, v_los):
-    """
+def fitacf_get_k_vector_circle(radlat, radlon, radmlat, radmlon, lat, lon, mlat, mlon, v_los):
 
-    :param apex:
-    :param stid:
+    """
+    :param radlat::
+    :param radlon:
+    :param radmlat::
+    :param radmlon:
     :param lat:
     :param lon:
     :param mlat:
@@ -337,11 +339,6 @@ def fitacf_get_k_vector_circle(apex, stid, lat, lon, mlat, mlon, v_los):
     :param v_los:
     :return:
     """
-
-    # Get position of radar in geographic from hdw files in pyDARN
-    radlat = pydarn.SuperDARNRadars.radars[pydarn.RadarID(stid)].hardware_info.geographic.lat
-    radlon = pydarn.SuperDARNRadars.radars[pydarn.RadarID(stid)].hardware_info.geographic.lon
-    radmlat, radmlon = apex.geo2apex(radlat, radlon, 300)
 
     # Graciously copied from Evan's code (invmag.pro)
     # Geographic
