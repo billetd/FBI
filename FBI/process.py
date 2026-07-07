@@ -22,6 +22,7 @@ from FBI.grid import lompe_grid_canada
 os.environ['RAY_DEDUP_LOGS'] = '0'
 os.environ['RAY_BACKEND_LOG_LEVEL'] = 'fatal'
 import ray
+_worker_apex = None
 
 
 def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_override=None, range_times=None):
@@ -64,7 +65,7 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
 
     # Retrive a grid encompassing the SuperDARN Canada PolarDARNs
     canada_grid = lompe_grid_canada(apex)
-    del apex   # No longer needed
+    del apex # No longer needed
 
     # Create Emodel object. Pass grid and Hall/Pedersen conductance functions
     model = lompe.Emodel(canada_grid, Hall_Pedersen_conductance=None, ew_regularization_limit=(50, 75))
@@ -76,10 +77,10 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
         # For debugging. Comment out when not in use
         # ray.init(num_cpus=1, include_dashboard=False, object_store_memory=2 * 1024 ** 3, local_mode=True)
 
-    scan_delta_id     = ray.put(scan_delta)
-    darn_grid_stuff_id = ray.put(darn_grid_stuff)
-    med_filter_id     = ray.put(med_filter)
-    model_id          = ray.put(model)
+    scan_delta_id       = ray.put(scan_delta)
+    darn_grid_stuff_id  = ray.put(darn_grid_stuff)
+    med_filter_id       = ray.put(med_filter)
+    model_id            = ray.put(model)
 
     # Bounded task submission via ray.wait().
     # keep at most `cores` tasks in-flight at any time, submitting the
@@ -148,13 +149,20 @@ def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter,
     :param darn_grid_stuff:
     :param med_filter:
     :param model:
+    :param apex:
     :return:
     """
 
-    apex = apexpy.Apex(scan_time, refh=300)
+    # Initialise apex only once per ray worker and hold on to it.
+    # This is because the apxex object can't be serialised with ray.put()
+    # Do this minimizes the number of apex intialisations
+    global _worker_apex
+    if _worker_apex is None:
+        _worker_apex = apexpy.Apex(scan_time, refh=300)
+        print("Apex initialized on this worker!")
 
     # Get the data in a format that Lompe likes
-    sd_data, rids = prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter)
+    sd_data, rids = prepare_lompe_inputs(_worker_apex, all_data, scan_time, scan_delta, med_filter)
 
     del all_data # No longer needed
 
@@ -167,14 +175,14 @@ def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter,
 
         # Collect the model data to save
         if scan_lompe is not None:
-            lompe_data = lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff, rids)
+            lompe_data = lompe_extract(scan_lompe, _worker_apex, scan_time, darn_grid_stuff, rids)
 
             # Clean up
-            del scan_lompe, sd_data, apex, darn_grid_stuff # No longer needed
+            del scan_lompe, sd_data, darn_grid_stuff # No longer needed
             print('Scan complete: ' + scan_time.strftime("%Y-%m-%d %H:%M:%S.%f"))
             return lompe_data
 
-        del sd_data, apex # No longer needed
+        del sd_data # No longer needed
 
 
     return None
