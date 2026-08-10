@@ -29,7 +29,8 @@ _worker_apex = None
 _gate_position_tables = {}
 
 
-def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_override=None, range_times=None):
+def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_override=None, range_times=None,
+            cache_geometry=True):
     """
     :param all_data: list[dict] - List of dictionaries containing fitacf data read in with fitacf.read_fitacfs()
     :param timerange: list[datetime] - Start and end times
@@ -38,6 +39,8 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     :param med_filter: True or False - Median filter the data before putting into Lompe
     :param scandelta_override: int - Time in seconds to gather data around scans
     :param range_times: list[datetime] - Custom "scan" intervals
+    :param cache_geometry: True or False - Reuse the SECS/apex matrices that depend only on the
+                           grids between scans. Much faster, but costs roughly 250 MB per core.
     """
 
 
@@ -75,9 +78,18 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     model = lompe.Emodel(canada_grid, Hall_Pedersen_conductance=None, ew_regularization_limit=(50, 75))
     del canada_grid  # No longer needed
 
+    # Build the data-density grid here rather than in every worker's first inversion
+    model.prepare_biggrid()
+
     # Only initialize Ray if it isn't already running.
+    # Pin BLAS to a single thread per worker.
     if not ray.is_initialized():
-        ray.init(num_cpus=cores, include_dashboard=False, object_store_memory=2 * 1024**3)
+        ray.init(num_cpus=cores, include_dashboard=False, object_store_memory=2 * 1024**3,
+                 runtime_env={'env_vars': {'OMP_NUM_THREADS': '1',
+                                           'OPENBLAS_NUM_THREADS': '1',
+                                           'MKL_NUM_THREADS': '1',
+                                           'VECLIB_MAXIMUM_THREADS': '1',
+                                           'NUMEXPR_NUM_THREADS': '1'}})
         # For debugging. Comment out when not in use
         # ray.init(num_cpus=1, include_dashboard=False, object_store_memory=2 * 1024 ** 3, local_mode=True)
 
@@ -85,6 +97,8 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     darn_grid_stuff_id  = ray.put(darn_grid_stuff)
     med_filter_id       = ray.put(med_filter)
     model_id            = ray.put(model)
+    cache_geometry_id   = ray.put(cache_geometry)
+    apex_epoch_id       = ray.put(range_times[0])
 
     # Bounded task submission via ray.wait().
     # keep at most `cores` tasks in-flight at any time, submitting the
@@ -99,44 +113,52 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     n_total = len(all_pairs)
     lompes  = [None] * n_total
 
-    # Each entry: (result_id, original_index)
+    # Scans are handed out in contiguous blocks rather than one at a time. Each task
+    # deserialises the Emodel and builds the geometry cache once, so doing several scans
+    # per task amortises that away. Aim for a few blocks per core so the work still
+    # balances if some scans are much heavier than others.
+    # Consecutive scans overlap by design (see all_data_make_iterable), and pickling a
+    # whole block at once lets the shared records be sent only once.
+    block_size = max(1, n_total // max(cores * 4, 1))
+    blocks = [(start, min(start + block_size, n_total))
+              for start in range(0, n_total, block_size)]
+
+    # Each entry: (result_id, (start, stop))
     pending   = []
     submitted = 0
 
-    # Submit the first batch (up to `cores` tasks)
-    for _ in range(min(cores, n_total)):
-        scan_time, this_scan_data = all_pairs[submitted]
-        rid = lompe_parallel.remote(
-            scan_time, this_scan_data,
-            scan_delta_id, darn_grid_stuff_id, med_filter_id, model_id
+    def submit(block):
+        start, stop = block
+        return lompe_parallel.remote(
+            [p[0] for p in all_pairs[start:stop]], [p[1] for p in all_pairs[start:stop]],
+            scan_delta_id, darn_grid_stuff_id, med_filter_id, model_id, apex_epoch_id,
+            cache_geometry_id
         )
-        pending.append((rid, submitted))
+
+    # Submit the first batch (up to `cores` tasks)
+    for _ in range(min(cores, len(blocks))):
+        pending.append((submit(blocks[submitted]), blocks[submitted]))
         submitted += 1
 
-    # Rolling window: as each task finishes, collect its result and launch the next
+    # Rolling window: as each task finishes, collect its results and launch the next
     while pending:
         pending_ids = [p[0] for p in pending]
         done_ids, _ = ray.wait(pending_ids, num_returns=1, timeout=600)
 
         if not done_ids:
-            # A task is taking longer than 1 minute — unusual, so warn the user. Maybe too long a scandeltaoverride?
+            # A task is taking longer than 10 minutes — unusual, so warn the user. Maybe too long a scandeltaoverride?
             print("Warning: task is taking unusually long, still waiting. Is your scan_delta too long?")
             continue
 
         done_id = done_ids[0]
-        original_idx = next(idx for rid, idx in pending if rid == done_id)
-        pending = [(rid, idx) for rid, idx in pending if rid != done_id]
+        start, stop = next(blk for rid, blk in pending if rid == done_id)
+        pending = [(rid, blk) for rid, blk in pending if rid != done_id]
 
-        lompes[original_idx] = ray.get(done_id)
+        lompes[start:stop] = ray.get(done_id)
 
-        # Submit the next pending task now that a worker slot has freed up
-        if submitted < n_total:
-            scan_time, this_scan_data = all_pairs[submitted]
-            rid = lompe_parallel.remote(
-                scan_time, this_scan_data,
-                scan_delta_id, darn_grid_stuff_id, med_filter_id, model_id
-            )
-            pending.append((rid, submitted))
+        # Submit the next pending block now that a worker slot has freed up
+        if submitted < len(blocks):
+            pending.append((submit(blocks[submitted]), blocks[submitted]))
             submitted += 1
 
     ray.shutdown()
@@ -144,33 +166,48 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     fbi_save_hdf5(lompes, timerange, lompe_dir)
 
 @ray.remote
-def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter, model):
+def lompe_parallel(scan_times, all_data_block, scan_delta, darn_grid_stuff, med_filter, model,
+                   apex_epoch, cache_geometry=True):
     """
-    Code to create a lompe fit for a given scan time. Designed to be parallelised with ray.
-    :param scan_time:
-    :param all_data:
+    Code to create lompe fits for a block of consecutive scan times. Designed to be
+    parallelised with ray. A block rather than a single scan, so that the one-off costs
+    per task (deserialising the model, initialising apexpy, building the geometry cache)
+    are shared between several scans.
+    :param scan_times: list[datetime] - the scan times in this block
+    :param all_data_block: list - the record window for each scan in the block
     :param scan_delta:
     :param darn_grid_stuff:
     :param med_filter:
     :param model:
-    :return:
+    :param apex_epoch: datetime the worker's apexpy object is initialised with
+    :param cache_geometry:
+    :return: list of lompe_extract() outputs, one per scan time, None where no fit was made
     """
 
-    # apex = apexpy.Apex(scan_time, refh=300)
     # Initialise apex only once per ray worker and hold on to it.
-    # This is because the apxex object can't be serialised with ray.put()
-    # Do this minimizes the number of apex intialisations
+    # This is because the apex object can't be serialised with ray.put()
+    # Doing this minimizes the number of apex intialisations.
+    # The epoch comes from the caller rather than from whichever scan this worker happened
+    # to be given first, so that results don't depend on how ray schedules the blocks.
     global _worker_apex
     if _worker_apex is None:
-        _worker_apex = apexpy.Apex(scan_time, refh=300)
+        _worker_apex = apexpy.Apex(apex_epoch, refh=300)
         print("Apex initialized on this worker!")
 
-    # Get the data in a format that Lompe likes
-    sd_data, rids = prepare_lompe_inputs(_worker_apex, all_data, scan_time, scan_delta, med_filter)
+    results = []
 
-    del all_data # No longer needed
+    for scan_time, all_data in zip(scan_times, all_data_block):
 
-    if sd_data is not None:
+        # Get the data in a format that Lompe likes
+        sd_data, rids = prepare_lompe_inputs(_worker_apex, all_data, scan_time, scan_delta, med_filter)
+
+        if sd_data is None:
+            results.append(None)
+            continue
+
+        # The model is reused across the block, so drop the previous scan's data first
+        model.clear_model()
+
         # Run lompe
         try:
             scan_lompe = run_lompe_model(sd_data, model)
@@ -178,18 +215,20 @@ def lompe_parallel(scan_time, all_data, scan_delta, darn_grid_stuff, med_filter,
             scan_lompe = None
 
         # Collect the model data to save
-        if scan_lompe is not None:
-            lompe_data = lompe_extract(scan_lompe, _worker_apex, scan_time, darn_grid_stuff, rids)
+        if scan_lompe is None:
+            results.append(None)
+            del sd_data
+            continue
 
-            # Clean up
-            del scan_lompe, sd_data, darn_grid_stuff # No longer needed
-            print('Scan complete: ' + scan_time.strftime("%Y-%m-%d %H:%M:%S.%f"))
-            return lompe_data
+        lompe_data = lompe_extract(scan_lompe, _worker_apex, scan_time, darn_grid_stuff, rids,
+                                   use_cache=cache_geometry)
 
-        del sd_data, # No longer needed
+        # Clean up
+        del scan_lompe, sd_data # No longer needed
+        print('Scan complete: ' + scan_time.strftime("%Y-%m-%d %H:%M:%S.%f"))
+        results.append(lompe_data)
 
-
-    return None
+    return results
 
 
 def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter):
@@ -419,10 +458,11 @@ def run_lompe_model(sd_data, model):
     model.add_data(sd_data)
 
     # Run inversion
+    # posterior=False skips Cmpost and Rmatrix, which cost ~4N^3 (N = grid_E.size) and are
+    # never read by lompe_extract - only the model vector is used.
     try:
-        model.run_inversion(l1=10, l2=0.1, lapack_driver='gelsy')
+        model.run_inversion(l1=10, l2=0.1, lapack_driver='gelsy', posterior=False)
     except TypeError:
         # I had the run break on inversion randomly once. Not sure why.
         model = None
-
     return model
