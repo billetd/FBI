@@ -15,7 +15,7 @@ import gc
 import numpy as np
 from FBI.readwrite import lompe_extract, fbi_save_hdf5
 from FBI.utils import find_indexes_within_time_range
-from FBI.fitacf import get_scan_times_widebeam, all_data_make_iterable, median_filter, fitacf_get_k_vector_circle
+from FBI.fitacf import get_scan_times_widebeam, all_data_make_iterable, median_filter_record, fitacf_get_k_vector_circle
 from FBI.fitacf import get_scan_times_old
 from pydarn.utils.coordinates import gate2geographic_location
 from FBI.grid import lompe_grid_canada
@@ -23,6 +23,10 @@ os.environ['RAY_DEDUP_LOGS'] = '0'
 os.environ['RAY_BACKEND_LOG_LEVEL'] = 'fatal'
 import ray
 _worker_apex = None
+
+# Per-process cache of beam/gate geographic positions, keyed by
+# (radar_id, max_beams, nrang, rsep, frang). See gate_position_table().
+_gate_position_tables = {}
 
 
 def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_override=None, range_times=None):
@@ -217,6 +221,36 @@ def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter):
     return sd_data, rid
 
 
+def gate_position_table(radar_id, max_beams, nrang, rsep, frang):
+    """
+    Geographic position of every beam/gate of a radar, as a pair of (max_beams, nrang)
+    lookup tables. These depend only on the hdw file and the range parameters, so building
+    them once per radar replaces one gate2geographic_location() call per record.
+
+    :param radar_id: pydarn.RadarID
+    :param max_beams: number of beams to tabulate
+    :param nrang: number of range gates to tabulate
+    :param rsep: range separation [km]
+    :param frang: distance to the first range gate [km]
+    :return: (lats, lons), each shaped (max_beams, nrang)
+    """
+
+    nrang = int(nrang)
+    key = (radar_id, int(max_beams), nrang, int(rsep), int(frang))
+    table = _gate_position_tables.get(key)
+    if table is None:
+        beams, gates = np.meshgrid(np.arange(max_beams), np.arange(nrang), indexing='ij')
+        lat, lon = gate2geographic_location(
+            stid=radar_id, beam=beams.ravel(), range_gate=gates.ravel(),
+            height=300, center=True, rsep=rsep, frang=frang
+        )
+        table = (np.asarray(lat).reshape(max_beams, nrang),
+                 np.asarray(lon).reshape(max_beams, nrang))
+        _gate_position_tables[key] = table
+
+    return table
+
+
 def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False):
     """
     :param apex:
@@ -298,38 +332,45 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
             except KeyError:
                 frang = 180
 
-            # Get coordinates of all beams and gates
-            lat, lon = gate2geographic_location(
-                stid=radar_id, beam=np.full(slist.size, beam), range_gate=slist,
-                height=300, center=True, rsep=rsep, frang=frang
-            )
+            # Get coordinates of all beams and gates. These only depend on the hardware and
+            # the range parameters, so they come from a per-radar lookup table.
+            table_lat, table_lon = gate_position_table(radar_id, max_beams,
+                                                       all_data[file_index][record]['nrang'], rsep, frang)
+            lat, lon = table_lat[beam, slist], table_lon[beam, slist]
 
             v    = all_data[file_index][record]['v']
             v_e  = all_data[file_index][record]['v_e']
 
-            # Iterate over the gates
-            for j, gate in enumerate(slist):
-                # Only continue if not ground scatter, velocity is below 2000m/s, and range gates above 10
-                # This removes most erroneous data and near-range (E-region) echos
-                if gflg[j] == 0 and abs(v[j]) <= 2000 and gate > 10:
+            # Only keep gates that are not ground scatter, have velocity below 2000m/s, and
+            # are above range gate 10. This removes most erroneous data and near-range
+            # (E-region) echos.
+            keep = (gflg == 0) & (np.abs(v) <= 2000) & (slist > 10)
 
-                    # Median filtering
-                    if med_filter:
-                        vel_range = median_filter(weighting_array, all_data[file_index], record, max_beams, gate)
-                    else:
-                        vel_range = v[j]
+            # Median filtering. One pass covers every gate of the record.
+            if med_filter:
+                if not keep.any():
+                    continue
+                medians, passed = median_filter_record(weighting_array, all_data[file_index],
+                                                       record, max_beams)
+                vel_range = medians[slist]
+                # The median filter can fail if unreliable scatter is found
+                keep &= passed[slist]
+            else:
+                vel_range = v
 
-                    # The median filter can fail if unreliable scatter is found
-                    # If so, skip this iteration
-                    if not vel_range:
-                        continue
+            # A velocity of exactly zero was dropped by the old `if not vel_range` check,
+            # in both the filtered and unfiltered case. Kept for consistency.
+            keep &= vel_range != 0.0
 
-                    # Store positions and velocity info
-                    _lats.append(lat[j])
-                    _lons.append(lon[j])
-                    _vlos_signed.append(vel_range)
-                    _vlos_mag.append(abs(vel_range))
-                    _vlos_err.append(abs(v_e[j]))
+            if not keep.any():
+                continue
+
+            # Store positions and velocity info
+            _lats.extend(lat[keep])
+            _lons.extend(lon[keep])
+            _vlos_signed.extend(vel_range[keep])
+            _vlos_mag.extend(np.abs(vel_range[keep]))
+            _vlos_err.extend(np.abs(v_e[keep]))
 
         if not _lats:
             continue

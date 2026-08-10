@@ -142,8 +142,9 @@ def get_scan_times_widebeam(all_data, timerange):
     # The mimimum diff should be close-ish to the average. Use that as a first "best guess"
     # Any diff that is off from 50% of the min is considered a delayed scan, and is removed when considering the avg
     # Need to subtract min from diffs and check to see which are over threshold
-    diffs_threshold = [0.5*min(radar) for radar in diffs]
-    filtered_diffs = [[d for d in diffs[i] if d-min(diffs[i]) < diffs_threshold[i]]
+    min_diffs = [min(radar) for radar in diffs]
+    diffs_threshold = [0.5*d for d in min_diffs]
+    filtered_diffs = [[d for d in diffs[i] if d - min_diffs[i] < diffs_threshold[i]]
                       for i in range(len(diffs_threshold))]
 
     # Get average scan lengths
@@ -186,10 +187,6 @@ def get_scan_times_old(all_data, timerange):
     # Find the index of the earliest datetime in the list
     earliest_radar = start_times.index(min(start_times))
 
-    # Get scan flags
-    scan_flags = [entry["scan"] for entry in all_data[earliest_radar]]
-    beams = [entry["bmnum"] for entry in all_data[earliest_radar]]
-
     # Indexes where scan flag is 1
     scan_indexes = [index for index, data_dict in enumerate(all_data[earliest_radar]) if
                     data_dict.get("scan") == 1]
@@ -200,18 +197,10 @@ def get_scan_times_old(all_data, timerange):
         scan_indexes = [index for index, data_dict in enumerate(all_data[earliest_radar]) if
                         data_dict.get("bmnum") == 0]
 
-    # All the times from all records
-    all_times = sorted(
-        dt.datetime(entry["time.yr"], entry["time.mo"], entry["time.dy"], entry["time.hr"], entry["time.mt"],
-                    entry["time.sc"], entry["time.us"]
-                    )
-        for entry in all_data[earliest_radar]
-    )
-
     # Special case for the imaging mode data
     # Only get the unique times if there as many records as scan,
     # Else only get the times where the scan flag is 1
-    if len(all_times) == len(scan_indexes):
+    if len(all_data[earliest_radar]) == len(scan_indexes):
         scan_times = sorted(set(
             dt.datetime(entry["time.yr"], entry["time.mo"], entry["time.dy"], entry["time.hr"], entry["time.mt"],
                         entry["time.sc"], entry["time.us"]
@@ -234,6 +223,133 @@ def get_scan_times_old(all_data, timerange):
     scan_delta = (scan_times[1]-scan_times[0]).seconds
 
     return scan_times, range_times, scan_delta
+
+
+def median_filter_record(weighting_array, fitacf_data, record, max_beams):
+    """
+    Vectorised equivalent of median_filter(), evaluated for every range gate of a record
+    in one pass.
+
+    For a fixed record the 3x3 neighbourhood of (scan, beam) records is the same for every
+    gate - only the 3-gate window moves. So the neighbourhood is unpacked once into dense
+    arrays indexed by gate, and the filter becomes a 3-tap window slid along the gate axis.
+
+    :param weighting_array: (3, 3, 3) array, indexed [scan_counter, gate_offset, beam_counter]
+    :param fitacf_data: list[dict] of records for one radar
+    :param record: index of the record to filter
+    :param max_beams: highest bmnum in the file, plus one
+    :return: (medians, passed), both of length nrang and indexed by range gate.
+             medians is the filtered velocity (NaN where no scatter was found), passed is
+             True where the weighting score was beaten, i.e. where median_filter() would
+             have returned a value rather than [].
+    """
+
+    n_recs = len(fitacf_data)
+
+    # Total number of range gates. Assumes constant in file (might break?)
+    max_range = fitacf_data[record]['nrang']
+    nrang = int(max_range)
+
+    # Previous and next scan
+    scans = [record - max_beams, record, record + max_beams]
+
+    # Current, left, and right beams
+    bmnum = fitacf_data[record]['bmnum']
+    beams = [bmnum - 1, bmnum, bmnum + 1]
+
+    # Score to beat when summing scatter in range gates. Reduced on beam/range edges.
+    base_score = 24
+    if beams[0] < 0 or beams[2] > max_beams:
+        base_score -= 3  # Reduce weight score by number of lost cells
+
+    # The range edge penalty depends on the gate, so it becomes an array
+    gate_axis = np.arange(nrang)
+    weight_score = np.full(nrang, base_score, dtype=np.int64)
+    weight_score[(gate_axis - 1 < 0) | (gate_axis + 1 > max_range)] -= 3
+
+    # Dense per-neighbour arrays over a gate axis padded by one on each side, so that
+    # padded index p holds gate p - 1 and the gates -1 and nrang are addressable.
+    npad = nrang + 2
+    valid = np.zeros((3, 3, npad), dtype=bool)
+    vel_pad = [[None] * 3 for _ in range(3)]
+    vel_dtypes = []
+
+    for scan_counter, scan in enumerate(scans):
+        if not (0 <= scan < n_recs):  # Check not before or after start/end of records
+            continue
+
+        for beam_counter, beam in enumerate(beams):
+            if not (0 <= beam < max_beams):
+                continue
+
+            beam_diff = beam_counter - 1  # This allows us to get the correct records
+            index = scan + beam_diff
+
+            # Have to check again if there is actually any data
+            try:
+                nb_slist = fitacf_data[index]['slist']
+            except (KeyError, IndexError):
+                continue
+            if nb_slist is None:
+                continue
+
+            nb_slist = np.asarray(nb_slist)
+            if nb_slist.size == 0:
+                continue
+
+            nb_gflg = fitacf_data[index]['gflg']
+            nb_v = np.asarray(fitacf_data[index]['v'])
+
+            # Keep the non-ground-scatter gates that can fall inside a 3-gate window of
+            # this record. Gates outside [-1, nrang] can never be reached.
+            keep = (np.asarray(nb_gflg) == 0) & (nb_slist >= -1) & (nb_slist <= nrang)
+            if not keep.any():
+                continue
+
+            positions = nb_slist[keep].astype(np.intp) + 1
+            valid[scan_counter, beam_counter, positions] = True
+
+            padded = np.zeros(npad, dtype=nb_v.dtype)
+            padded[positions] = nb_v[keep]
+            vel_pad[scan_counter][beam_counter] = padded
+            vel_dtypes.append(nb_v.dtype)
+
+    vel_dtype = np.result_type(*vel_dtypes) if vel_dtypes else np.dtype(np.float64)
+
+    # Sum the weights of every occupied cell in the 3x3x3 neighbourhood of each gate, and
+    # collect the velocities of those cells as columns for the median.
+    cumulative_weight = np.zeros(nrang, dtype=np.float64)
+    columns = []
+    for scan_counter in range(3):
+        weights = weighting_array[scan_counter]  # 3x3, [gate_offset, beam_counter]
+        for beam_counter in range(3):
+            padded = vel_pad[scan_counter][beam_counter]
+            if padded is None:
+                continue
+            occupied = valid[scan_counter, beam_counter]
+            for gate_offset in range(3):
+                window = occupied[gate_offset:gate_offset + nrang]
+                cumulative_weight += weights[gate_offset][beam_counter] * window
+                columns.append((window, padded[gate_offset:gate_offset + nrang]))
+
+    passed = cumulative_weight > weight_score
+
+    # Per-gate median over however many cells were occupied. Filling the unused slots with
+    # NaN lets a single sort handle all the different lengths at once, since NaNs sort last.
+    medians = np.full(nrang, np.nan, dtype=vel_dtype)
+    if columns:
+        stack = np.full((nrang, len(columns)), np.nan, dtype=vel_dtype)
+        counts = np.zeros(nrang, dtype=np.intp)
+        for column, (window, values) in enumerate(columns):
+            stack[window, column] = values[window]
+            counts += window
+        stack.sort(axis=1)
+        rows = np.nonzero(counts > 0)[0]
+        if rows.size:
+            n = counts[rows]
+            medians[rows] = 0.5 * (stack[rows, (n - 1) // 2] + stack[rows, n // 2])
+
+    return medians, passed
 
 
 def median_filter(weighting_array, fitacf_data, record, max_beams, gate):
