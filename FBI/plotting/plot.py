@@ -68,11 +68,17 @@ def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
     magnitude = np.sqrt(v_emag ** 2 + v_nmag ** 2)
     magn_src_crs = np.sqrt(u_src_crs ** 2 + v_src_crs ** 2)
 
+    # Put the stretched vectors back to the right length. Velocities are rounded to whole
+    # m/s on write, so a cell can be zero in both components. Those get zero length.
+    nonzero = magn_src_crs != 0
+    u_plot = np.divide(u_src_crs * magnitude, magn_src_crs, out=np.zeros_like(magnitude), where=nonzero)
+    v_plot = np.divide(v_src_crs * magnitude, magn_src_crs, out=np.zeros_like(magnitude), where=nonzero)
+
     colours_norm = Normalize(vmin=0, vmax=1000)
     if coord == 'mag':
 
         # Plot all the vectors at grid points normally
-        quiv_thin = ax.quiver(mlons, mlats, u_src_crs * magnitude / magn_src_crs, v_src_crs * magnitude / magn_src_crs,
+        quiv_thin = ax.quiver(mlons, mlats, u_plot, v_plot,
                               magnitude, norm=colours_norm, scale=2000, scale_units='inches', width=0.001,
                               headwidth=3, transform=ccrs.PlateCarree(), angles='xy', cmap='viridis', zorder=3)
 
@@ -85,16 +91,14 @@ def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
             if len(loc[0]) > 0:
                 locs.append(loc[0])
 
-        u_src_crs_thick = u_src_crs[locs]
-        v_src_crs_thick = v_src_crs[locs]
+        u_plot_thick = u_plot[locs]
+        v_plot_thick = v_plot[locs]
         magnitude_thick = magnitude[locs]
-        magn_src_crs_thick = magn_src_crs[locs]
         thick_mlons = mlons[locs]
         thick_mlats = mlats[locs]
 
         # Plot thick vectors
-        quiv_thick = ax.quiver(thick_mlons, thick_mlats, u_src_crs_thick * magnitude_thick /
-                               magn_src_crs_thick, v_src_crs_thick * magnitude_thick / magn_src_crs_thick,
+        quiv_thick = ax.quiver(thick_mlons, thick_mlats, u_plot_thick, v_plot_thick,
                                magnitude_thick, norm=colours_norm, scale=2000, scale_units='inches', width=0.003,
                                headwidth=3, transform=ccrs.PlateCarree(), angles='xy', cmap='viridis', zorder=3)
         # Plot thick vectors

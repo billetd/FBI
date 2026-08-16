@@ -38,6 +38,7 @@ def get_local_axis(apex):
     gl.xlocator = mticker.FixedLocator(np.arange(-180, 181, 45))
     gl.top_labels = False
     gl.bottom_labels = False
+    gl.geo_labels = False
     gl.xlines = False
 
     # Read in the geometry object of the coastlines
