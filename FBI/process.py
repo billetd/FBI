@@ -10,39 +10,52 @@ import lompe
 import datetime as dt
 import pydarn
 import FBI.grid as grid
-import os
+import FBI.readwrite as readwrite
 import gc
+import os
+import time
 import numpy as np
-from FBI.readwrite import lompe_extract, fbi_save_hdf5
+from FBI.readwrite import lompe_extract, FBIWriter
+from FBI.parallel import resolve_cores, forked_pool, bounded_imap
 from FBI.utils import find_indexes_within_time_range
 from FBI.fitacf import get_scan_times_widebeam, all_data_make_iterable, median_filter_record, fitacf_get_k_vector_circle
 from FBI.fitacf import get_scan_times_old
 from pydarn.utils.coordinates import gate2geographic_location
 from FBI.grid import lompe_grid_canada
-os.environ['RAY_DEDUP_LOGS'] = '0'
-os.environ['RAY_BACKEND_LOG_LEVEL'] = 'fatal'
-import ray
+
+# apexpy object used for every scan. An Apex object can't be pickled, so it is built here
+# and the workers inherit it.
 _worker_apex = None
 
 # Per-process cache of beam/gate geographic positions, keyed by
 # (radar_id, max_beams, nrang, rsep, frang). See gate_position_table().
 _gate_position_tables = {}
 
+# The model, grids and record windows the workers read. Filled in before forking, so the
+# workers inherit it and a task is just a scan index.
+_shared = {}
 
-def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_override=None, range_times=None,
+
+def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandelta_override=None, range_times=None,
             cache_geometry=True):
     """
     :param all_data: list[dict] - List of dictionaries containing fitacf data read in with fitacf.read_fitacfs()
     :param timerange: list[datetime] - Start and end times
     :param lompe_dir: str - Directory to save FBI output file
-    :param cores: int - Number of cores to use when multiprocessing. Choose 1 for single core.
+    :param cores: int - Number of worker processes. None uses every CPU available. Choose 1
+                  to fit in this process with no pool, for profiling or debugging.
     :param med_filter: True or False - Median filter the data before putting into Lompe
     :param scandelta_override: int - Time in seconds to gather data around scans
     :param range_times: list[datetime] - Custom "scan" intervals
     :param cache_geometry: True or False - Reuse the SECS/apex matrices that depend only on the
-                           grids between scans. Much faster, but costs roughly 250 MB per core.
+                           grids between scans. Much faster, and costs a few hundred MB for
+                           the run rather than per core.
     """
 
+    cores = resolve_cores(cores)
+
+    # Clear anything left by a previous call, e.g. from extras.process_date()
+    _reset_caches()
 
     # If no "range_times" is given, work it out based on input data
     # May produce silly scans if there is a mix of normal scan and other modes. Be cautious and only use
@@ -81,154 +94,162 @@ def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_
     # Build the data-density grid here rather than in every worker's first inversion
     model.prepare_biggrid()
 
-    # Only initialize Ray if it isn't already running.
-    # Pin BLAS to a single thread per worker.
-    if not ray.is_initialized():
-        ray.init(num_cpus=cores, include_dashboard=False, object_store_memory=2 * 1024**3,
-                 runtime_env={'env_vars': {'OMP_NUM_THREADS': '1',
-                                           'OPENBLAS_NUM_THREADS': '1',
-                                           'MKL_NUM_THREADS': '1',
-                                           'VECLIB_MAXIMUM_THREADS': '1',
-                                           'NUMEXPR_NUM_THREADS': '1'}})
-        # For debugging. Comment out when not in use
-        # ray.init(num_cpus=1, include_dashboard=False, object_store_memory=2 * 1024 ** 3, local_mode=True)
+    # Build everything the workers need before forking, so they share it rather than
+    # each being sent a copy
+    _prime_shared_state(range_times, all_data_iterable, scan_delta, darn_grid_stuff,
+                        med_filter, model, cache_geometry)
 
-    scan_delta_id       = ray.put(scan_delta)
-    darn_grid_stuff_id  = ray.put(darn_grid_stuff)
-    med_filter_id       = ray.put(med_filter)
-    model_id            = ray.put(model)
-    cache_geometry_id   = ray.put(cache_geometry)
-    apex_epoch_id       = ray.put(range_times[0])
-
-    # Bounded task submission via ray.wait().
-    # keep at most `cores` tasks in-flight at any time, submitting the
-    # next one only when a slot frees up.
-    all_pairs = list(zip(range_times, all_data_iterable))
+    n_total = len(range_times)
+    cores = min(cores, max(1, n_total))  # No point in more workers than scans
 
     del darn_grid_stuff, model
     del all_data_iterable
     del all_data # No longer needed
     gc.collect()
 
-    n_total = len(all_pairs)
-    lompes  = [None] * n_total
+    try:
+        started = time.monotonic()
+        with FBIWriter(timerange, lompe_dir) as writer:
+            if cores == 1:
+                # Single process, so exceptions and profilers behave normally
+                for index in range(n_total):
+                    writer.write(index, _lompe_one_scan(index))
+                    _report_progress(index + 1, n_total, started)
+            else:
+                # One scan per task, for the best load balancing. The window limits how
+                # many finished scans can be waiting to be written.
+                with forked_pool(cores) as pool:
+                    for index, result in bounded_imap(pool, _lompe_one_scan, n_total, 2 * cores):
+                        writer.write(index, result)
+                        _report_progress(index + 1, n_total, started)
+            print('\nWrote ' + str(writer.n_written) + ' of ' + str(n_total) + ' scans')
+    finally:
+        # Drop the model and record windows before the caller moves on to the next chunk
+        _reset_caches()
+        gc.collect()
 
-    # Scans are handed out in contiguous blocks rather than one at a time. Each task
-    # deserialises the Emodel and builds the geometry cache once, so doing several scans
-    # per task amortises that away. Aim for a few blocks per core so the work still
-    # balances if some scans are much heavier than others.
-    # Consecutive scans overlap by design (see all_data_make_iterable), and pickling a
-    # whole block at once lets the shared records be sent only once.
-    block_size = max(1, n_total // max(cores * 4, 1))
-    blocks = [(start, min(start + block_size, n_total))
-              for start in range(0, n_total, block_size)]
 
-    # Each entry: (result_id, (start, stop))
-    pending   = []
-    submitted = 0
-
-    def submit(block):
-        start, stop = block
-        return lompe_parallel.remote(
-            [p[0] for p in all_pairs[start:stop]], [p[1] for p in all_pairs[start:stop]],
-            scan_delta_id, darn_grid_stuff_id, med_filter_id, model_id, apex_epoch_id,
-            cache_geometry_id
-        )
-
-    # Submit the first batch (up to `cores` tasks)
-    for _ in range(min(cores, len(blocks))):
-        pending.append((submit(blocks[submitted]), blocks[submitted]))
-        submitted += 1
-
-    # Rolling window: as each task finishes, collect its results and launch the next
-    while pending:
-        pending_ids = [p[0] for p in pending]
-        done_ids, _ = ray.wait(pending_ids, num_returns=1, timeout=600)
-
-        if not done_ids:
-            # A task is taking longer than 10 minutes — unusual, so warn the user. Maybe too long a scandeltaoverride?
-            print("Warning: task is taking unusually long, still waiting. Is your scan_delta too long?")
-            continue
-
-        done_id = done_ids[0]
-        start, stop = next(blk for rid, blk in pending if rid == done_id)
-        pending = [(rid, blk) for rid, blk in pending if rid != done_id]
-
-        lompes[start:stop] = ray.get(done_id)
-
-        # Submit the next pending block now that a worker slot has freed up
-        if submitted < len(blocks):
-            pending.append((submit(blocks[submitted]), blocks[submitted]))
-            submitted += 1
-
-    ray.shutdown()
-
-    fbi_save_hdf5(lompes, timerange, lompe_dir)
-
-@ray.remote
-def lompe_parallel(scan_times, all_data_block, scan_delta, darn_grid_stuff, med_filter, model,
-                   apex_epoch, cache_geometry=True):
+def _prime_shared_state(range_times, all_data_iterable, scan_delta, darn_grid_stuff,
+                        med_filter, model, cache_geometry):
     """
-    Code to create lompe fits for a block of consecutive scan times. Designed to be
-    parallelised with ray. A block rather than a single scan, so that the one-off costs
-    per task (deserialising the model, initialising apexpy, building the geometry cache)
-    are shared between several scans.
-    :param scan_times: list[datetime] - the scan times in this block
-    :param all_data_block: list - the record window for each scan in the block
-    :param scan_delta:
-    :param darn_grid_stuff:
-    :param med_filter:
-    :param model:
-    :param apex_epoch: datetime the worker's apexpy object is initialised with
-    :param cache_geometry:
-    :return: list of lompe_extract() outputs, one per scan time, None where no fit was made
+    Set up the state the workers read, before the pool is forked
+    :param range_times: list[datetime] - scan times
+    :param all_data_iterable: list - the record window for each scan
+    :param scan_delta: int - seconds of data to gather around each scan
+    :param darn_grid_stuff: dict from FBI.grid.sdarn_grid()
+    :param med_filter: True or False
+    :param model: lompe Emodel
+    :param cache_geometry: True or False
     """
 
-    # Initialise apex only once per ray worker and hold on to it.
-    # This is because the apex object can't be serialised with ray.put()
-    # Doing this minimizes the number of apex intialisations.
-    # The epoch comes from the caller rather than from whichever scan this worker happened
-    # to be given first, so that results don't depend on how ray schedules the blocks.
     global _worker_apex
-    if _worker_apex is None:
-        _worker_apex = apexpy.Apex(apex_epoch, refh=300)
-        print("Apex initialized on this worker!")
 
-    results = []
+    # Must come after the Emodel is built. Emodel makes its own Apex at epoch 2015, and
+    # apexpy holds the epoch in Fortran state shared by every Apex in the process, so
+    # building ours last puts the epoch back to the one the data wants.
+    _worker_apex = apexpy.Apex(range_times[0], refh=300)
 
-    for scan_time, all_data in zip(scan_times, all_data_block):
+    if cache_geometry:
+        readwrite.prime_geometry_cache(model, _worker_apex, darn_grid_stuff)
 
-        # Get the data in a format that Lompe likes
-        sd_data, rids = prepare_lompe_inputs(_worker_apex, all_data, scan_time, scan_delta, med_filter)
+    _freeze_model_arrays(model)
 
-        if sd_data is None:
-            results.append(None)
-            continue
+    _shared.update(range_times=range_times,
+                   all_data_iterable=all_data_iterable,
+                   scan_delta=scan_delta,
+                   darn_grid_stuff=darn_grid_stuff,
+                   med_filter=med_filter,
+                   model=model,
+                   cache_geometry=cache_geometry)
 
-        # The model is reused across the block, so drop the previous scan's data first
-        model.clear_model()
 
-        # Run lompe
-        try:
-            scan_lompe = run_lompe_model(sd_data, model)
-        except IndexError:
-            scan_lompe = None
+def _freeze_model_arrays(model, min_bytes=1 << 20):
+    """
+    Mark the Emodel's large matrices read-only, so the workers share rather than copy them.
+    The inversion only rebinds these attributes, so nothing should be writing through them.
+    If something does, it raises instead of quietly diverging in one worker.
+    Set FBI_FREEZE_MODEL=0 to skip.
+    :param model: lompe Emodel
+    :param min_bytes: smallest array worth freezing
+    """
 
-        # Collect the model data to save
-        if scan_lompe is None:
-            results.append(None)
-            del sd_data
-            continue
+    if os.environ.get('FBI_FREEZE_MODEL') == '0':
+        return
 
-        lompe_data = lompe_extract(scan_lompe, _worker_apex, scan_time, darn_grid_stuff, rids,
-                                   use_cache=cache_geometry)
+    for value in vars(model).values():
+        if isinstance(value, np.ndarray) and value.nbytes >= min_bytes:
+            try:
+                value.flags.writeable = False
+            except ValueError:
+                # A view whose base is already read-only
+                pass
 
-        # Clean up
-        del scan_lompe, sd_data # No longer needed
-        print('Scan complete: ' + scan_time.strftime("%Y-%m-%d %H:%M:%S.%f"))
-        results.append(lompe_data)
 
-    return results
+def _reset_caches():
+    """
+    Clear the process-wide state set up by process().
+    None of it is keyed on the grid or the apex epoch, so it can't be reused between calls.
+    """
+
+    global _worker_apex
+    _worker_apex = None
+    _gate_position_tables.clear()
+    _shared.clear()
+    readwrite.reset_geometry_cache()
+
+
+def _report_progress(done, total, started, every=20):
+    """
+    Overwrite a single line with the scan count and an estimate of the time left
+    :param done: int - scans completed
+    :param total: int - scans in the run
+    :param started: float - time.monotonic() when the run began
+    :param every: int - only redraw every this many scans
+    """
+
+    if done % every and done != total:
+        return
+
+    elapsed = time.monotonic() - started
+    rate = done / elapsed if elapsed > 0 else 0.0
+    eta = (total - done) / rate if rate > 0 else float('nan')
+    print('\r  {}/{} scans, {:.1f}/s, {:.1f} min remaining    '.format(done, total, rate, eta / 60),
+          end='', flush=True)
+
+
+def _lompe_one_scan(index):
+    """
+    Create the lompe fit for a single scan. This is what each worker runs.
+    Everything but the index comes from _shared, which the workers inherit.
+    :param index: int - position of this scan in range_times
+    :return: lompe_extract() output, or None if no fit was made
+    """
+
+    scan_time = _shared['range_times'][index]
+    all_data = _shared['all_data_iterable'][index]
+    model = _shared['model']
+
+    # Get the data in a format that Lompe likes
+    sd_data, rids = prepare_lompe_inputs(_worker_apex, all_data, scan_time,
+                                         _shared['scan_delta'], _shared['med_filter'])
+
+    if sd_data is None:
+        return None
+
+    # The model is reused between scans, so drop the previous scan's data first
+    model.clear_model()
+
+    # Run lompe
+    try:
+        scan_lompe = run_lompe_model(sd_data, model)
+    except IndexError:
+        return None
+
+    if scan_lompe is None:
+        return None
+
+    return lompe_extract(scan_lompe, _worker_apex, scan_time, _shared['darn_grid_stuff'],
+                         rids, use_cache=_shared['cache_geometry'])
 
 
 def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter):
@@ -460,9 +481,14 @@ def run_lompe_model(sd_data, model):
     # Run inversion
     # posterior=False skips Cmpost and Rmatrix, which cost ~4N^3 (N = grid_E.size) and are
     # never read by lompe_extract - only the model vector is used.
+    # Needs the lompe fork at github.com/billetd/lompe. Stock lompe passes posterior
+    # through to scipy.linalg.lstsq, which raises TypeError on every scan.
     try:
         model.run_inversion(l1=10, l2=0.1, lapack_driver='gelsy', posterior=False)
-    except TypeError:
-        # I had the run break on inversion randomly once. Not sure why.
-        model = None
+    except TypeError as err:
+        raise TypeError(
+            'run_inversion() rejected its arguments. FBI needs the lompe fork at '
+            'github.com/billetd/lompe, which takes posterior= and provides '
+            'prepare_biggrid().'
+        ) from err
     return model

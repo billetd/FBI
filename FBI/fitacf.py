@@ -4,73 +4,82 @@ This module contains code for reading in, and handling, SuperDARN fitacf files
 
 import pydarn
 import gc
-import os
 import datetime as dt
 import numpy as np
 import math
+from FBI.parallel import resolve_cores, forked_pool
 from FBI.utils import find_indexes_within_time_range
 
 
-def read_fitacfs(fitacf_files, cores=1, start=None, end=None):
+def sdarnreadmulti(fitacf_file, start=None, end=None):
+    """
+    Read one fitacf file, keeping only the records and keys lompe needs
+    :param fitacf_file: str, path to the file
+    :param start: Start time to store, default the start of the file
+    :param end: End time to store, default the end of the file
+    :return: list[dict], one dictionary per record
+    """
+
+    print('Reading: ' + fitacf_file)
+
+    # sdarnread = pydarn.SuperDARNRead(fitacf_file)
+    # fitacf_data = sdarnread.read_fitacf()
+    fitacf_data, _ = pydarn.read_fitacf(fitacf_file)
+
+    # Keep only keys which are required for lompe
+    keys_to_keep = ['time.yr', 'time.mo', 'time.dy', 'time.hr', 'time.mt', 'time.sc',
+                    'time.us', 'scan', 'bmnum', 'stid', 'slist', 'gflg', 'rsep', 'frang',
+                    'v', 'v_e', 'nrang']
+    new_fitacf_data = []
+    for d in fitacf_data:
+        new_dict = {}
+        for key in keys_to_keep:
+            new_dict[key] = d.get(key)  # This will return None if key is missing
+        new_fitacf_data.append(new_dict)
+    del fitacf_data
+
+    # Get all times in the file
+    rid_record_times = [dt.datetime(new_fitacf_data[x]['time.yr'], new_fitacf_data[x]['time.mo'],
+                                    new_fitacf_data[x]['time.dy'], new_fitacf_data[x]['time.hr'],
+                                    new_fitacf_data[x]['time.mt'], new_fitacf_data[x]['time.sc'],
+                                    new_fitacf_data[x]['time.us'])
+                        for x in range(0, len(new_fitacf_data))]
+
+    if start is None:
+        start = rid_record_times[0]
+    if end is None:
+        end = rid_record_times[-1]
+
+    filtered_indices = [i for i, time in enumerate(rid_record_times) if start <= time <= end]
+    new_new_fitacf_data = [new_fitacf_data[index] for index in filtered_indices]
+
+    gc.collect()
+    return new_new_fitacf_data
+
+
+def read_fitacfs(fitacf_files, cores=None, start=None, end=None):
     """
     Reads fitacf files into one big list [number of files] of list [number of records]
     of dictionaries [fitacf variables]
     :param fitacf_files: list[str], list of fitacf files to read. Must be a list/array, even if just one file
-    :param cores: int, number of cores to use when parallel reading files. Defaults to zero.
+    :param cores: int, number of worker processes. None uses every CPU available. 1 reads
+                  in this process, with no pool.
     :param start: Start time to store, default the start of the file
     :param end: End time to store, default the end of the file
     :return:
     """
 
-    os.environ['RAY_DEDUP_LOGS'] = '0'
-    import ray
+    cores = min(resolve_cores(cores), max(1, len(fitacf_files)))
 
-    ray.init(num_cpus=cores)
+    if cores == 1:
+        all_data = [sdarnreadmulti(inp, start, end) for inp in fitacf_files]
+    else:
+        # One file per worker
+        with forked_pool(cores) as pool:
+            all_data = pool.starmap(sdarnreadmulti,
+                                    [(inp, start, end) for inp in fitacf_files])
 
-    @ray.remote
-    def sdarnreadmulti(fitacf_file, start=None, end=None):
-        print('Reading: ' + fitacf_file)
-
-        # sdarnread = pydarn.SuperDARNRead(fitacf_file)
-        # fitacf_data = sdarnread.read_fitacf()
-        fitacf_data, _ = pydarn.read_fitacf(fitacf_file)
-
-        # Keep only keys which are required for lompe
-        keys_to_keep = ['time.yr', 'time.mo', 'time.dy', 'time.hr', 'time.mt', 'time.sc',
-                        'time.us', 'scan', 'bmnum', 'stid', 'slist', 'gflg', 'rsep', 'frang',
-                        'v', 'v_e', 'nrang']
-        new_fitacf_data = []
-        for d in fitacf_data:
-            new_dict = {}
-            for key in keys_to_keep:
-                new_dict[key] = d.get(key)  # This will return None if key is missing
-            new_fitacf_data.append(new_dict)
-        del fitacf_data
-
-        # Get all times in the file
-        rid_record_times = [dt.datetime(new_fitacf_data[x]['time.yr'], new_fitacf_data[x]['time.mo'],
-                                        new_fitacf_data[x]['time.dy'], new_fitacf_data[x]['time.hr'],
-                                        new_fitacf_data[x]['time.mt'], new_fitacf_data[x]['time.sc'],
-                                        new_fitacf_data[x]['time.us'])
-                            for x in range(0, len(new_fitacf_data))]
-
-        if start is None:
-            start = rid_record_times[0]
-        if end is None:
-            end = rid_record_times[-1]
-
-        filtered_indices = [i for i, time in enumerate(rid_record_times) if start <= time <= end]
-        new_new_fitacf_data = [new_fitacf_data[index] for index in filtered_indices]
-
-        gc.collect()
-        return new_new_fitacf_data
-
-    # Read in all the files
-    start_id = ray.put(start)
-    end_id = ray.put(end)
-    all_data = ray.get([sdarnreadmulti.remote(inp, start_id, end_id) for inp in fitacf_files])
     all_data = [x for x in all_data if x and x is not None]  # Gets rid of empty lists and None's
-    ray.shutdown()
     return all_data
 
 

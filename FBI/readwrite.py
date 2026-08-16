@@ -3,10 +3,32 @@ import h5py
 import datetime as dt
 from secsy import get_SECS_J_G_matrices
 
-# Cache of the geometry that does not change between scans, built lazily on first use.
-# One per process, so under Ray each worker builds its own copy and then reuses it for
-# every scan it handles. See _build_geometry_cache() for what goes in it.
+# Cache of the geometry that does not change between scans, built once and then inherited
+# by the workers. See _build_geometry_cache() for what goes in it.
 _geometry_cache = None
+
+
+def prime_geometry_cache(model, apex, darn_grid_stuff):
+    """
+    Build the static geometry up front, so the workers inherit it rather than each
+    building its own. Everything it needs is on the Emodel before any inversion is run.
+    :param model: lompe Emodel, used only for its grids
+    :param apex: apexpy.Apex object
+    :param darn_grid_stuff: dict from FBI.grid.sdarn_grid()
+    """
+
+    global _geometry_cache
+    _geometry_cache = _build_geometry_cache(model, apex, darn_grid_stuff)
+
+
+def reset_geometry_cache():
+    """
+    Drop the cached geometry. It isn't keyed on anything, so it has to go whenever the
+    grid or the apex epoch changes.
+    """
+
+    global _geometry_cache
+    _geometry_cache = None
 
 
 def _build_geometry_cache(scan_lompe, apex, darn_grid_stuff):
@@ -142,72 +164,133 @@ def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff, rids, use_cache=
     return data
 
 
+def fbi_hdf5_name(timerange):
+    """
+    Name of the output file for a given timerange
+    :param timerange: list[datetime] - Start and end times
+    :return: str
+    """
+
+    return ('FBI_' + timerange[0].strftime("%Y%m%d%H%M%S") + '_'
+            + timerange[1].strftime("%Y%m%d%H%M%S") + ".hdf5")
+
+
+def _write_scan_group(f, counter, lompe):
+    """
+    Write one scan's output as a group of an open hdf5 file
+    :param f: open h5py.File
+    :param counter: int - scan index, used as the group name
+    :param lompe: dict from lompe_extract()
+    """
+
+    grp = f.create_group(str(counter))
+
+    # Fit vectors for the lompe grid
+    grp.create_dataset("v_e_model", shape=(len(lompe['v_e_model'])), data=lompe['v_e_model'],
+                       compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
+    grp.create_dataset("v_n_model", shape=(len(lompe['v_n_model'])), data=lompe['v_n_model'],
+                       compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
+    grp.create_dataset("mlats_model", shape=(len(lompe['mlats_model'])), data=lompe['mlats_model'],
+                       compression="gzip")
+    grp.create_dataset("mlons_model", shape=(len(lompe['mlons_model'])), data=lompe['mlons_model'],
+                       compression="gzip")
+
+    # Line-of-sight data going into the fit
+    grp.create_dataset("v_e_los", shape=(len(lompe['v_e_los'])), data=lompe['v_e_los'],
+                       compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
+    grp.create_dataset("v_n_los", shape=(len(lompe['v_n_los'])), data=lompe['v_n_los'],
+                       compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
+    grp.create_dataset("mlats_los", shape=(len(lompe['mlats_los'])), data=lompe['mlats_los'],
+                       compression="gzip")
+    grp.create_dataset("mlons_los", shape=(len(lompe['mlons_los'])), data=lompe['mlons_los'],
+                       compression="gzip")
+    grp.create_dataset("rids", shape=(len(lompe['rids'])), data=lompe['rids'], compression="gzip")
+
+    # Fit vectors, at the locations of the SuperDARN equal area grid
+    grp.create_dataset("v_e_darngrid", shape=(len(lompe['v_e_darngrid'])), data=lompe['v_e_darngrid'],
+                       compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
+    grp.create_dataset("v_n_darngrid", shape=(len(lompe['v_n_darngrid'])), data=lompe['v_n_darngrid'],
+                       compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
+    grp.create_dataset("mlats_darngrid", shape=(len(lompe['mlats_darngrid'])), data=lompe['mlats_darngrid'],
+                       compression="gzip")
+    grp.create_dataset("mlons_darngrid", shape=(len(lompe['mlons_darngrid'])), data=lompe['mlons_darngrid'],
+                       compression="gzip")
+
+    # Electric potential on the Lompe grid
+    grp.create_dataset("e_pot_model", shape=(len(lompe['e_pot_model'])), data=lompe['e_pot_model'],
+                       compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
+
+    # Coordinates of the boundary of the fit
+    grp.create_dataset("bound_mlats", shape=(len(lompe['bound_mlats'])), data=lompe['bound_mlats'],
+                       compression="gzip")
+    grp.create_dataset("bound_mlons", shape=(len(lompe['bound_mlons'])), data=lompe['bound_mlons'],
+                       compression="gzip")
+
+    # Time info
+    grp.create_dataset("scan_year", shape=1, data=lompe['scan_year'])
+    grp.create_dataset("scan_month", shape=1, data=lompe['scan_month'])
+    grp.create_dataset("scan_day", shape=1, data=lompe['scan_day'])
+    grp.create_dataset("scan_hour", shape=1, data=lompe['scan_hour'])
+    grp.create_dataset("scan_minute", shape=1, data=lompe['scan_minute'])
+    grp.create_dataset("scan_second", shape=1, data=lompe['scan_second'])
+    grp.create_dataset("scan_millisec", shape=1, data=lompe['scan_millisec'])
+
+
+class FBIWriter:
+    """
+    Writes each scan to the hdf5 file as it is fitted, so a whole run of them never has
+    to be held in memory at once. One group per scan index, skipping scans with no fit.
+
+    Usage:
+        with FBIWriter(timerange, lompe_dir) as writer:
+            writer.write(index, lompe_data)
+    """
+
+    def __init__(self, timerange, lompe_dir):
+        """
+        :param timerange: list[datetime] - Start and end times, used for the file name
+        :param lompe_dir: str - Directory to save the FBI output file in
+        """
+
+        if not lompe_dir.endswith('/'):
+            lompe_dir += '/'
+        self.path = lompe_dir + fbi_hdf5_name(timerange)
+        self._f = None
+        self.n_written = 0
+
+    def __enter__(self):
+        print('Writing to ' + self.path)
+        self._f = h5py.File(self.path, "w")
+        return self
+
+    def write(self, index, lompe):
+        """
+        :param index: int - scan index, used as the group name
+        :param lompe: dict from lompe_extract(), or None if the scan produced no fit
+        """
+
+        if lompe is None:
+            return
+        _write_scan_group(self._f, index, lompe)
+        self.n_written += 1
+
+    def __exit__(self, *exc):
+        self._f.close()
+        self._f = None
+        return False
+
+
 def fbi_save_hdf5(lompes, timerange, lompe_dir):
     """
-    Save the output from process() into a hdf5 file
-    :param lompes:
-    :param timerange:
-    :param lompe_dir:
-    :return:
+    Save a complete list of scans into a hdf5 file, all at once
+    :param lompes: list of lompe_extract() dicts, None where no fit was made
+    :param timerange: list[datetime] - Start and end times
+    :param lompe_dir: str - Directory to save the FBI output file in
     """
 
-    # Dump data to hdf5 file
-    print('Writing to file...')
-    hdf5name = 'FBI_' + timerange[0].strftime("%Y%m%d%H%M%S") + '_' + timerange[1].strftime("%Y%m%d%H%M%S") + ".hdf5"
-    with h5py.File(lompe_dir + hdf5name, "w") as f:
+    with FBIWriter(timerange, lompe_dir) as writer:
         for counter, lompe in enumerate(lompes):
-            if lompe is not None:
-                grp = f.create_group(str(counter))
-
-                # Fit vectors for the lompe grid
-                grp.create_dataset("v_e_model", shape=(len(lompe['v_e_model'])), data=lompe['v_e_model'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
-                grp.create_dataset("v_n_model", shape=(len(lompe['v_n_model'])), data=lompe['v_n_model'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
-                grp.create_dataset("mlats_model", shape=(len(lompe['mlats_model'])), data=lompe['mlats_model'],
-                                   compression="gzip")
-                grp.create_dataset("mlons_model", shape=(len(lompe['mlons_model'])), data=lompe['mlons_model'],
-                                   compression="gzip")
-
-                # Line-of-sight data going into the fit
-                grp.create_dataset("v_e_los", shape=(len(lompe['v_e_los'])), data=lompe['v_e_los'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
-                grp.create_dataset("v_n_los", shape=(len(lompe['v_n_los'])), data=lompe['v_n_los'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
-                grp.create_dataset("mlats_los", shape=(len(lompe['mlats_los'])), data=lompe['mlats_los'],
-                                   compression="gzip")
-                grp.create_dataset("mlons_los", shape=(len(lompe['mlons_los'])), data=lompe['mlons_los'],
-                                   compression="gzip")
-                grp.create_dataset("rids", shape=(len(lompe['rids'])), data=lompe['rids'], compression="gzip")
-
-                # Fit vectors, at the locations of the SuperDARN equal area grid
-                grp.create_dataset("v_e_darngrid", shape=(len(lompe['v_e_darngrid'])), data=lompe['v_e_darngrid'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
-                grp.create_dataset("v_n_darngrid", shape=(len(lompe['v_n_darngrid'])), data=lompe['v_n_darngrid'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
-                grp.create_dataset("mlats_darngrid", shape=(len(lompe['mlats_darngrid'])), data=lompe['mlats_darngrid'],
-                                   compression="gzip")
-                grp.create_dataset("mlons_darngrid", shape=(len(lompe['mlons_darngrid'])), data=lompe['mlons_darngrid'],
-                                   compression="gzip")
-
-                # Electric potential on the Lompe grid
-                grp.create_dataset("e_pot_model", shape=(len(lompe['e_pot_model'])), data=lompe['e_pot_model'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
-
-                # Coordinates of the boundary of the fit
-                grp.create_dataset("bound_mlats", shape=(len(lompe['bound_mlats'])), data=lompe['bound_mlats'],
-                                   compression="gzip")
-                grp.create_dataset("bound_mlons", shape=(len(lompe['bound_mlons'])), data=lompe['bound_mlons'],
-                                   compression="gzip")
-
-                # Time info
-                grp.create_dataset("scan_year", shape=1, data=lompe['scan_year'])
-                grp.create_dataset("scan_month", shape=1, data=lompe['scan_month'])
-                grp.create_dataset("scan_day", shape=1, data=lompe['scan_day'])
-                grp.create_dataset("scan_hour", shape=1, data=lompe['scan_hour'])
-                grp.create_dataset("scan_minute", shape=1, data=lompe['scan_minute'])
-                grp.create_dataset("scan_second", shape=1, data=lompe['scan_second'])
-                grp.create_dataset("scan_millisec", shape=1, data=lompe['scan_millisec'])
+            writer.write(counter, lompe)
 
 
 def fbi_load_hdf5(file, timerange=None):
