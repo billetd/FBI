@@ -3,6 +3,19 @@ import h5py
 import datetime as dt
 
 
+def record_datetime(record):
+    """
+    Build a scan's datetime from the scan_year/month/day/hour/minute/second/millisec fields
+    written by lompe_extract() / fbi_save_hdf5().
+    :param record: dict, a single scan record as returned by fbi_load_hdf5()
+    :return: datetime.datetime
+    """
+
+    return dt.datetime(record['scan_year'][0], record['scan_month'][0], record['scan_day'][0],
+                       record['scan_hour'][0], record['scan_minute'][0], record['scan_second'][0],
+                       record['scan_millisec'][0])
+
+
 def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff, rids):
     """
     Code to extract potentials and velocities at good points for later plotting
