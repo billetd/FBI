@@ -7,6 +7,48 @@ from matplotlib import pyplot as plt
 from polplot import Polarplot
 from shapely.geometry import MultiLineString
 
+# Coastlines in projected coordinates, keyed on the apex epoch, projection and window
+_coastline_cache = {}
+
+
+def coastline_segments(apex, ot, path, window):
+    """
+    Coastline segments in magnetic coordinates, projected and ready to plot
+    :param apex: apexpy.Apex object
+    :param ot: cartopy projection of the axis
+    :param path: matplotlib Path of the plot window
+    :param window: plot window as (x0, x1, y0, y1), for the cache key
+    :return: list of (x, y) arrays, one per segment in view
+    """
+
+    key = (apex.year, ot.proj4_init, window)
+    segments = _coastline_cache.get(key)
+    if segments is not None:
+        return segments
+
+    # Read in the geometry object of the coastlines
+    cc = cfeature.NaturalEarthFeature('physical', 'coastline', '50m',
+                                      color='k', zorder=2.0)
+    shapes = [shape.coords.xy for shape in cc.geometries()
+              if not isinstance(shape, MultiLineString)]  # Don't plot multi geoms as it breaks
+
+    # All the points in one apex call and one projection, rather than one per shape
+    glons = np.concatenate([coords[0] for coords in shapes])
+    glats = np.concatenate([coords[1] for coords in shapes])
+    ends = np.cumsum([len(coords[0]) for coords in shapes])
+
+    mlats, mlons = apex.geo2apex(glats, glons, 300)
+    x_coast, y_coast, zcoast = ot.transform_points(ccrs.PlateCarree(), mlons, mlats).T
+
+    # Keep segments with any point in the plot window
+    inside = path.contains_points(np.column_stack((x_coast, y_coast)))
+    segments = [(x_coast[start:end], y_coast[start:end])
+                for start, end in zip(np.concatenate(([0], ends[:-1])), ends)
+                if inside[start:end].any()]
+
+    _coastline_cache[key] = segments
+    return segments
+
 
 def get_local_axis(apex):
     """
@@ -41,22 +83,10 @@ def get_local_axis(apex):
     gl.geo_labels = False
     gl.xlines = False
 
-    # Read in the geometry object of the coastlines
-    cc = cfeature.NaturalEarthFeature('physical', 'coastline', '50m',
-                                      color='k', zorder=2.0)
-
     # Plot coastlines
-    for buh, shape in enumerate(list(cc.geometries())):
-        if isinstance(shape, MultiLineString):  # Don't plot multi geoms as it breaks
-            continue
-        glats = shape.coords.xy[1]
-        glons = shape.coords.xy[0]
-        mlats, mlons = apex.geo2apex(glats, glons, 300)
-        x_coast, y_coast, zcoast = ot.transform_points(ccrs.PlateCarree(), mlons, mlats).T
-        points = path.contains_points(list(zip(x_coast, y_coast)))
-        if any(points):  # Check if any of the points to plot are actually in the plot window
-            # plt.fill(x_coast, y_coast, zorder=0, color='grey')  # Doesn't work right atm. Weird shapes.
-            plt.plot(x_coast, y_coast, zorder=0, color='grey', linewidth=0.5, alpha=0.6)
+    for x_coast, y_coast in coastline_segments(apex, ot, path, (xs[0], xs[1], ys[0], ys[1])):
+        # plt.fill(x_coast, y_coast, zorder=0, color='grey')  # Doesn't work right atm. Weird shapes.
+        plt.plot(x_coast, y_coast, zorder=0, color='grey', linewidth=0.5, alpha=0.6)
     return ax, ot, 'mag', fig
 
 

@@ -293,12 +293,13 @@ def fbi_save_hdf5(lompes, timerange, lompe_dir):
             writer.write(counter, lompe)
 
 
-def fbi_load_hdf5(file, timerange=None):
+def fbi_load_hdf5(file, timerange=None, as_arrays=False):
     """
     Load the data saved by fbi_save_hdf5()
     Use timerange as a datetime tuple to only read in between two times
     :param file: Path to the FBI hdf5 file
     :param timerange: Optional. [start_time, end_time] datetime objects from a period of time to read in.
+    :param as_arrays: Keep the datasets as numpy arrays rather than converting to lists
     :return: lompes: list of dictionaries containing the data
     """
 
@@ -335,7 +336,8 @@ def fbi_load_hdf5(file, timerange=None):
             # Iterate over keys
             for dataset in datasets:
 
-                this_record[dataset] = f[group + '/' + dataset][()].tolist()
+                values = f[group + '/' + dataset][()]
+                this_record[dataset] = values if as_arrays else values.tolist()
 
             # Append to list of dictionaries
             lompes.append(this_record)

@@ -16,7 +16,7 @@ import os
 import time
 import numpy as np
 from FBI.readwrite import lompe_extract, FBIWriter
-from FBI.parallel import resolve_cores, forked_pool, bounded_imap
+from FBI.parallel import resolve_cores, forked_pool, bounded_imap, report_progress
 from FBI.utils import find_indexes_within_time_range
 from FBI.fitacf import get_scan_times_widebeam, all_data_make_iterable, median_filter_record, fitacf_get_k_vector_circle
 from FBI.fitacf import get_scan_times_old
@@ -114,14 +114,14 @@ def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandel
                 # Single process, so exceptions and profilers behave normally
                 for index in range(n_total):
                     writer.write(index, _lompe_one_scan(index))
-                    _report_progress(index + 1, n_total, started)
+                    report_progress(index + 1, n_total, started)
             else:
                 # One scan per task, for the best load balancing. The window limits how
                 # many finished scans can be waiting to be written.
                 with forked_pool(cores) as pool:
                     for index, result in bounded_imap(pool, _lompe_one_scan, n_total, 2 * cores):
                         writer.write(index, result)
-                        _report_progress(index + 1, n_total, started)
+                        report_progress(index + 1, n_total, started)
             print('\nWrote ' + str(writer.n_written) + ' of ' + str(n_total) + ' scans')
     finally:
         # Drop the model and record windows before the caller moves on to the next chunk
@@ -196,25 +196,6 @@ def _reset_caches():
     _gate_position_tables.clear()
     _shared.clear()
     readwrite.reset_geometry_cache()
-
-
-def _report_progress(done, total, started, every=20):
-    """
-    Overwrite a single line with the scan count and an estimate of the time left
-    :param done: int - scans completed
-    :param total: int - scans in the run
-    :param started: float - time.monotonic() when the run began
-    :param every: int - only redraw every this many scans
-    """
-
-    if done % every and done != total:
-        return
-
-    elapsed = time.monotonic() - started
-    rate = done / elapsed if elapsed > 0 else 0.0
-    eta = (total - done) / rate if rate > 0 else float('nan')
-    print('\r  {}/{} scans, {:.1f}/s, {:.1f} min remaining    '.format(done, total, rate, eta / 60),
-          end='', flush=True)
 
 
 def _lompe_one_scan(index):

@@ -1,4 +1,4 @@
-from FBI.plotting.plot_main import lompe_scan_plot_vectors, lompe_scan_plot_potential, lompe_scan_plot_potential_polar
+from FBI.plotting.plot_main import plot_records
 from FBI.readwrite import fbi_load_hdf5
 import gc
 import glob
@@ -29,22 +29,10 @@ if __name__ == '__main__':
             os.mkdir(dirname)
 
         # Read in an FBI hdf5 file
-        fbi_data = fbi_load_hdf5(fbi_file, timerange=timerange)
+        fbi_data = fbi_load_hdf5(fbi_file, timerange=timerange, as_arrays=True)
 
-        # Iterate over the records in the file and plot
-        for record in fbi_data:
-        # for rec in range(7032, 7040):
-
-            lompe_scan_plot_vectors(record, path=dirname)
-            # lompe_scan_plot_potential_polar(record, dirname)
-            # lompe_scan_plot_potential(record, dirname)
-            print(dt.datetime(record['scan_year'][0],
-                              record['scan_month'][0],
-                              record['scan_day'][0],
-                              record['scan_hour'][0],
-                              record['scan_minute'][0],
-                              record['scan_second'][0]).
-                  strftime("%Y-%m-%d %H:%M:%S"))
+        # Plot every record. kind can be 'vectors', 'potential' or 'potential_polar'
+        plot_records(fbi_data, dirname, cores=None, kind='potential_polar')
 
         del fbi_data
         gc.collect()

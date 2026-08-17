@@ -7,6 +7,7 @@ import contextlib
 import multiprocessing
 import os
 import threading
+import time
 import warnings
 from collections import deque
 
@@ -93,3 +94,23 @@ def bounded_imap(pool, func, n_items, window):
 
         index, pending = inflight.popleft()
         yield index, pending.get()
+
+
+def report_progress(done, total, started, every=20, unit='scans'):
+    """
+    Overwrite a single line with the item count and an estimate of the time left
+    :param done: int - items completed
+    :param total: int - items in the run
+    :param started: float - time.monotonic() when the run began
+    :param every: int - only redraw every this many items
+    :param unit: str - what is being counted
+    """
+
+    if done % every and done != total:
+        return
+
+    elapsed = time.monotonic() - started
+    rate = done / elapsed if elapsed > 0 else 0.0
+    eta = (total - done) / rate if rate > 0 else float('nan')
+    print('\r  {}/{} {}, {:.1f}/s, {:.1f} min remaining    '.format(done, total, unit, rate, eta / 60),
+          end='', flush=True)
