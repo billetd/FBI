@@ -39,6 +39,7 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["FBI", "FBI.*"]
+namespaces = false
 
 [tool.setuptools_scm]
 
