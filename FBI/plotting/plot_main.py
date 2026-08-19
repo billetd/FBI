@@ -12,6 +12,11 @@ from FBI.plotting.plot import plot_noon_line, plot_vecs_model_darn_grid, plot_po
 # Use latex for rendering if install, fallback if not
 _USETEX = bool(shutil.which('latex') and shutil.which('dvipng'))
 
+# font fallback
+plt.rcParams['font.sans-serif'] = (['Verdana']
+                                   + [font for font in plt.rcParamsDefault['font.sans-serif']
+                                      if font != 'Verdana'])
+
 def lompe_scan_plot_vectors(lompe, path=None, save=True, apex=None):
     """
 
