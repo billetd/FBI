@@ -15,7 +15,7 @@ dependencies = [
     "matplotlib",
     "cartopy",
     "geodarn @ git+https://github.com/billetd/geodarn.git@main",
-    "pydarn @ git+https://github.com/SuperDARN/pydarn@develop",
+    "pydarn @ git+https://github.com/SuperDARN/pydarn@ehn/gate2geo_vectorisation",
     "pydarnio",
     "lompe @ git+https://github.com/billetd/lompe.git@main",
     "dipole @ git+https://github.com/klaundal/dipole.git@main#egg=dipole",
