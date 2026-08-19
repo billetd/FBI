@@ -1,6 +1,7 @@
 import apexpy
 import matplotlib.pyplot as plt
 import datetime as dt
+import shutil
 import time
 from os import path as pathy
 from FBI.parallel import resolve_cores, forked_pool, bounded_imap, report_progress
@@ -8,6 +9,8 @@ from FBI.plotting.axis import get_local_axis, get_polar_axis
 from FBI.plotting.plot import plot_noon_line, plot_vecs_model_darn_grid, plot_potential_contours, plot_data_locs, \
     plot_boundary_box
 
+# Use latex for rendering if install, fallback if not
+_USETEX = bool(shutil.which('latex') and shutil.which('dvipng'))
 
 def lompe_scan_plot_vectors(lompe, path=None, save=True, apex=None):
     """
@@ -19,7 +22,7 @@ def lompe_scan_plot_vectors(lompe, path=None, save=True, apex=None):
     :return:
     """
 
-    plt.rcParams['text.usetex'] = True
+    plt.rcParams['text.usetex'] = _USETEX
     scan_time = dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
                             lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
 
@@ -67,7 +70,7 @@ def lompe_scan_plot_potential(lompe, path, save=True, apex=None):
     :return:
     """
 
-    plt.rcParams['text.usetex'] = True
+    plt.rcParams['text.usetex'] = _USETEX
 
     scan_time = dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
                             lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
