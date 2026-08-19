@@ -17,11 +17,9 @@ All pre-requisites will be installed, if they are not already.
 
 # Creating an FBI output file
 
-See [process_example.py](FBI/process_example.py) for an example of creating an FBI HDF5 file from SuperDARN data. The code was written to work with Borealis wide-beam data, but should work with any SuperDARN operating mode. 
+See [process_example.py](examples/process_example.py) for an example of creating an FBI HDF5 file from SuperDARN data. The code was written to work with Borealis wide-beam data, but should work with any SuperDARN operating mode. 
 
 The HDF5 file created contains the Lompe fits to the SuperDARN data used as input. See [readwrite.py](FBI/readwrite.py) for how this is formatted.
-
-Code for making plots is also included. See [plotting_example.py](FBI/plotting_example.py) for an example of reading in an FBI HDF5 file and making plots.
 
 # Basic usage for reading FitACF into a Lompe format
 
