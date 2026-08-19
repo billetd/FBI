@@ -17,6 +17,11 @@ plt.rcParams['font.sans-serif'] = (['Verdana']
                                    + [font for font in plt.rcParamsDefault['font.sans-serif']
                                       if font != 'Verdana'])
 
+# Image parameters. Increase DPI to increase resolution. 150 = website patch processing. 300 = publication
+_DPI = 150
+_SUFFIX = '.webp'
+_SAVE_KWARGS = {'lossless': True, 'method': 4}
+
 def lompe_scan_plot_vectors(lompe, path=None, save=True, apex=None):
     """
 
@@ -32,7 +37,7 @@ def lompe_scan_plot_vectors(lompe, path=None, save=True, apex=None):
                             lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
 
     if path is not None:
-        save_path = path + scan_time.strftime("vecs_%Y-%m-%d_%H%M%S") + '.png'
+        save_path = path + scan_time.strftime("vecs_%Y-%m-%d_%H%M%S") + _SUFFIX
         if pathy.isfile(save_path) is False:  # Check plot doesn't already exist
             go = True
         else:
@@ -56,7 +61,7 @@ def lompe_scan_plot_vectors(lompe, path=None, save=True, apex=None):
         plot_vecs_model_darn_grid(lompe, ax, coord=coord)
 
         if save is True:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.savefig(save_path, dpi=_DPI, bbox_inches='tight', pil_kwargs=_SAVE_KWARGS)
             plt.close('all')
             return None, None, None, None
         else:
@@ -80,7 +85,7 @@ def lompe_scan_plot_potential(lompe, path, save=True, apex=None):
     scan_time = dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
                             lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
     if path is not None:
-        save_path = path + scan_time.strftime("pot_%Y-%m-%d_%H%M%S") + '.png'
+        save_path = path + scan_time.strftime("pot_%Y-%m-%d_%H%M%S") + _SUFFIX
         if pathy.isfile(save_path) is False:  # Check plot doesn't already exist
             go = True
         else:
@@ -107,7 +112,7 @@ def lompe_scan_plot_potential(lompe, path, save=True, apex=None):
         plot_data_locs(lompe, ax, apex=None, time=None, coord=coord)
 
         if save is True:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.savefig(save_path, dpi=_DPI, bbox_inches='tight', pil_kwargs=_SAVE_KWARGS)
             plt.close('all')
             return None, None, None, None
         else:
@@ -132,7 +137,7 @@ def lompe_scan_plot_potential_polar(lompe, path, save=True, apex=None):
                             lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
 
     if path is not None:
-        save_path = path + scan_time.strftime("polar_pot_%Y-%m-%d_%H%M%S") + '.png'
+        save_path = path + scan_time.strftime("polar_pot_%Y-%m-%d_%H%M%S") + _SUFFIX
         if pathy.isfile(save_path) is False:  # Check plot doesn't already exist
             go = True
         else:
@@ -159,7 +164,7 @@ def lompe_scan_plot_potential_polar(lompe, path, save=True, apex=None):
         plot_boundary_box(lompe, ax, apex, scan_time)
 
         if save is True:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.savefig(save_path, dpi=_DPI, bbox_inches='tight', pil_kwargs=_SAVE_KWARGS)
             plt.close('all')
             return None, None, None, None
         else:

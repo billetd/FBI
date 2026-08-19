@@ -12,6 +12,10 @@ from FBI.process import process
 _PLOT_PREFIXES = {'vectors': 'vecs_', 'potential': 'pot_', 'potential_polar': 'polar_pot_'}
 _PLOT_STAMP = '%Y-%m-%d_%H%M%S'
 
+# Images are written as WebP now. PNGs from before that change still count as done, so switching
+# format doesn't make a run replot everything that already exists.
+_PLOT_SUFFIXES = ('.webp', '.png')
+
 
 def process_date(fitacf_files: str, output_dir: str, date: dt.datetime, cores: int, hour_span=2, scandelta_override=6,
                  med_filter=True)->None:
@@ -241,13 +245,14 @@ def _plots_present(plot_root: str, kind: str, start: dt.datetime, end: dt.dateti
         day_dir = _plot_day_dir(plot_root, kind, day)
 
         if day_dir not in seen:
-            stamps = []
-            for image in glob(day_dir + prefix + '*.png'):
-                name = os.path.basename(image)[len(prefix):-len('.png')]
-                try:
-                    stamps.append(dt.datetime.strptime(name, _PLOT_STAMP))
-                except ValueError:
-                    continue  # Something else living in the directory
+            stamps = set()
+            for suffix in _PLOT_SUFFIXES:
+                for image in glob(day_dir + prefix + '*' + suffix):
+                    name = os.path.basename(image)[len(prefix):-len(suffix)]
+                    try:
+                        stamps.add(dt.datetime.strptime(name, _PLOT_STAMP))
+                    except ValueError:
+                        continue  # Something else living in the directory
             seen[day_dir] = stamps
 
         count += sum(1 for stamp in seen[day_dir] if start <= stamp < end)
