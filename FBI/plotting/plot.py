@@ -1,9 +1,8 @@
 import cartopy.crs as ccrs
 import numpy as np
-from geodarn.gridding import create_grid_records
 from matplotlib import pyplot as plt, ticker, cm
 from matplotlib.colors import Normalize
-from FBI.grid import Container
+from FBI.grid import darn_grid_cell_index
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 
@@ -38,29 +37,25 @@ def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
     data_mlons = lompe['mlons_los']
 
     # Grid the data locations, so we can see where we want to highlight them when plotting
-    # Put in a dictionary for the gridding code
-    # from BorealisConvection.lompe_gridding import Container
-    location = np.array([data_mlons, data_mlats]).T
-    located = Container(location=location)
-    idx_in_grid, darn_grid = create_grid_records(located)
-    mlons_grid = darn_grid[:, 0]
-    mlats_grid = darn_grid[:, 1]
+    data_cells = darn_grid_cell_index(data_mlons, data_mlats)
 
     # Get velocity vectors and points of grid
     v_emag = np.array(lompe['v_e_darngrid'])
     v_nmag = np.array(lompe['v_n_darngrid'])
     mlons = np.array(lompe['mlons_darngrid'])
-
-    # Seems to be a problem with floating point precision if this isn't done
-    # This whole method could use re-working tbh. Currently quite janky.
-    # TODO: Rework method for finding grid cells with data
-    mlons = np.round(mlons)
     mlats = np.array(lompe['mlats_darngrid'])
+
+    # Vectors in grid cells with data in them
+    thick = np.isin(darn_grid_cell_index(mlons, mlats), data_cells[data_cells >= 0])
+
+    # Vectors are plotted at the nearest whole degree of longitude
+    mlons = np.round(mlons)
     hilats = np.where(mlats > 89)
     mlats = np.delete(mlats, hilats)
     mlons = np.delete(mlons, hilats)
     v_emag = np.delete(v_emag, hilats)
     v_nmag = np.delete(v_nmag, hilats)
+    thick = np.delete(thick, hilats)
 
     # Rotate and scale vectors (https://github.com/SciTools/cartopy/issues/1179)
     u_src_crs = v_emag / np.cos(mlats / 180 * np.pi)
@@ -82,20 +77,12 @@ def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
                               magnitude, norm=colours_norm, scale=2000, scale_units='inches', width=0.001,
                               headwidth=3, transform=ccrs.PlateCarree(), angles='xy', cmap='viridis', zorder=3)
 
-        # Figure out the velocities of data points which fall in the sdarn grid
-        mlats_idx = mlats_grid[idx_in_grid].compressed()
-        mlons_idx = mlons_grid[idx_in_grid].compressed()
-        locs = []
-        for this_mlat, this_mlon in zip(mlats_idx, mlons_idx):
-            loc = np.where((this_mlat == mlats) & ((np.floor(this_mlon) == mlons) | (np.ceil(this_mlon) == mlons)))
-            if len(loc[0]) > 0:
-                locs.append(loc[0])
-
-        u_plot_thick = u_plot[locs]
-        v_plot_thick = v_plot[locs]
-        magnitude_thick = magnitude[locs]
-        thick_mlons = mlons[locs]
-        thick_mlats = mlats[locs]
+        # Vectors in the grid cells with data
+        u_plot_thick = u_plot[thick]
+        v_plot_thick = v_plot[thick]
+        magnitude_thick = magnitude[thick]
+        thick_mlons = mlons[thick]
+        thick_mlats = mlats[thick]
 
         # Plot thick vectors
         quiv_thick = ax.quiver(thick_mlons, thick_mlats, u_plot_thick, v_plot_thick,

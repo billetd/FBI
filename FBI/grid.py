@@ -4,15 +4,10 @@ Code for handling grid related things, like making the lompe grid, or handling t
 import lompe
 import numpy as np
 from geodarn.gridding import create_grid
-from dataclasses import dataclass, field
 
-
-@dataclass
-class Container:
-    location: np.ndarray = field(
-        metadata={'group': 'data',
-                  'units': 'degrees',
-                  'description': 'Array of [lon, lat] locations'})
+# Lower latitude boundary and cell height of the SuperDARN equal area grid [degrees]
+DARN_GRID_LAT_MIN = 60
+DARN_GRID_LAT_WIDTH = 1
 
 
 def sdarn_grid(apex):
@@ -24,7 +19,7 @@ def sdarn_grid(apex):
     """
 
     # Get the Superdarn grid
-    _, _, darn_grid = create_grid(60, 1, 'north')
+    _, _, darn_grid = create_grid(DARN_GRID_LAT_MIN, DARN_GRID_LAT_WIDTH, 'north')
     # _, _, darn_grid = create_grid(10, 1, 'north')
     darn_grid = darn_grid.reshape(-1, 2)
     mlats_darngrid = darn_grid[:, 1].compressed()
@@ -37,6 +32,37 @@ def sdarn_grid(apex):
                        'glons_darngrid': glons_darngrid}
 
     return darn_grid_stuff
+
+
+def darn_grid_cell_index(mlons, mlats, lat_min=DARN_GRID_LAT_MIN, lat_width=DARN_GRID_LAT_WIDTH):
+    """
+    Find which cell of the SuperDARN equal area grid each point is in
+    :param mlons: array - Magnetic longitudes [degrees]
+    :param mlats: array - Magnetic latitudes [degrees]
+    :param lat_min: Lower latitude boundary of the grid [degrees]
+    :param lat_width: Cell height [degrees]
+    :return: array of int - Index of each point's cell in the flattened geodarn
+             create_grid() grid, or -1 for points outside the grid
+    """
+
+    lat_divs_bottom, lon_divs, darn_grid = create_grid(lat_min, lat_width, 'north')
+    max_num_lons = darn_grid.shape[1]
+
+    mlons = (np.asarray(mlons, dtype=float) + 180) % 360 - 180
+    mlats = np.asarray(mlats, dtype=float)
+    cells = np.full(mlats.shape, -1)
+
+    # Latitude band of each point, then the longitude cell within that band
+    on_grid = np.isfinite(mlons) & (mlats >= lat_min) & (mlats <= 90)
+    rows = np.full(mlats.shape, -1)
+    rows[on_grid] = np.minimum(np.searchsorted(lat_divs_bottom, mlats[on_grid], side='right') - 1,
+                               len(lat_divs_bottom) - 1)
+    for row in np.unique(rows[on_grid]):
+        in_row = rows == row
+        cols = np.searchsorted(lon_divs[row], mlons[in_row], side='right') - 1
+        cells[in_row] = row * max_num_lons + np.clip(cols, 0, len(lon_divs[row]) - 2)
+
+    return cells
 
 
 def lompe_grid_canada(apex):
