@@ -53,6 +53,9 @@ def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandel
     if scandelta_override is not None:
         scan_delta = scandelta_override
 
+    n_total = len(range_times)
+    cores = min(cores, max(1, n_total))  # No point in more workers than scans
+
     # Initialise an apexpy object, for magnetic transforms
     apex = apexpy.Apex(range_times[0], refh=300)
 
@@ -62,15 +65,13 @@ def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandel
 
     # Cut down lompe model on a grid encompassing the SuperDARN Canada PolarDARNs, with the
     # regularisation used for every fit
-    model = inversion.Model(grid.lompe_grid_canada(apex), l1=10, l2=0.1, ew_regularization_limit=(50, 75))
+    model = inversion.Model(grid.lompe_grid_canada(apex), l1=10, l2=0.1, ew_regularization_limit=(50, 75),
+                            threads=cores)
     del apex  # No longer needed
 
     # Build everything the workers need before forking, so they share it rather than
     # each being sent a copy
     _prime_shared_state(all_data, range_times, scan_delta, darn_grid_stuff, med_filter, model)
-
-    n_total = len(range_times)
-    cores = min(cores, max(1, n_total))  # No point in more workers than scans
 
     del darn_grid_stuff, model
     gc.collect()

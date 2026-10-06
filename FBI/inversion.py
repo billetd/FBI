@@ -4,6 +4,7 @@ Builds just the matrices FBI uses, and solves for just the model vector, skippin
 covariance and resolution matrices.
 """
 import datetime as dt
+from concurrent.futures import ThreadPoolExecutor
 import apexpy
 import numpy as np
 import scipy.linalg
@@ -17,7 +18,7 @@ RE = 6371.2e3  # Earth radius, as in lompe [m]
 class Model:
 
     def __init__(self, grid, l1=10, l2=0.1, ew_regularization_limit=(50, 75), perimeter_width=10,
-                 epoch=dt.datetime(2015, 1, 1)):
+                 epoch=dt.datetime(2015, 1, 1), threads=1):
         """
         :param grid: secsy CSgrid - The lompe grid (grid_J in lompe)
         :param l1: float - Damping parameter for the model norm
@@ -27,7 +28,10 @@ class Model:
         :param perimeter_width: int - Cells added around grid_J for the data density grid.
                                 Data outside of it are not used.
         :param epoch: datetime - For the main field and the magnetic east direction. lompe's default.
+        :param threads: int - Threads to build the SECS matrices with
         """
+
+        self.threads = threads
 
         # Inner and outer grids, as in Emodel
         self.grid_J = grid
@@ -89,17 +93,40 @@ class Model:
         if lon is None:
             lon, lat = self.lon_J, self.lat_J
 
-        Ee, En = get_SECS_J_G_matrices(lat, lon, self.lat_E, self.lon_E, current_type='curl_free',
-                                       RI=self.R, singularity_limit=self.secs_singularity_limit)
-        return En * self.Bu / self.B0 ** 2, -Ee * self.Bu / self.B0 ** 2
+        def rows(lon, lat):
+            Ee, En = get_SECS_J_G_matrices(lat, lon, self.lat_E, self.lon_E, current_type='curl_free',
+                                           RI=self.R, singularity_limit=self.secs_singularity_limit)
+            return En * self.Bu / self.B0 ** 2, -Ee * self.Bu / self.B0 ** 2
+
+        return self._by_rows(rows, lon, lat)
 
     def potential_matrix(self):
         """
         Matrix that gives the electric potential on grid_J when dotted with the model vector
         """
 
-        return get_SECS_J_G_matrices(self.lat_J, self.lon_J, self.lat_E, self.lon_E, current_type='potential',
-                                     RI=self.R, singularity_limit=self.secs_singularity_limit)
+        def rows(lon, lat):
+            return (get_SECS_J_G_matrices(lat, lon, self.lat_E, self.lon_E, current_type='potential',
+                                          RI=self.R, singularity_limit=self.secs_singularity_limit),)
+
+        return self._by_rows(rows, self.lon_J, self.lat_J)[0]
+
+    def _by_rows(self, func, lon, lat, chunk=256):
+        """
+        func(lon, lat) a chunk of points at a time, spread over threads. Each row of the SECS
+        matrices only depends on its own point, so this gives the same as one call.
+        :param func: function returning a tuple of matrices with one row per point
+        :return: tuple of matrices
+        """
+
+        lon, lat = np.ravel(lon), np.ravel(lat)
+        if self.threads == 1 or lon.size <= chunk:
+            return func(lon, lat)
+
+        with ThreadPoolExecutor(self.threads) as pool:
+            parts = list(pool.map(lambda start: func(lon[start:start + chunk], lat[start:start + chunk]),
+                                  range(0, lon.size, chunk)))
+        return tuple(np.concatenate(matrices) for matrices in zip(*parts))
 
     def los_matrix(self, lon, lat, le, ln):
         """
