@@ -109,8 +109,8 @@ def lompe_extract(model, m, los, apex, scan_time, darn_grid_stuff, use_cache=Tru
     These are the values saved to HDF5 later in fbi_write_hdf5()
     :param model: FBI.inversion.Model
     :param m: model vector from FBI.inversion.Model.solve()
-    :param los: dict of the data that went into the fit: 'glat', 'glon', 'vlos', 'le', 'ln'
-                and 'rids'
+    :param los: dict of the data that went into the fit: geographic velocity 'v_e_geo' and 'v_n_geo',
+                position 'mlats' and 'mlons', QD base vectors 'f' and station ids 'rids'
     :param apex:
     :param scan_time:
     :param darn_grid_stuff:
@@ -139,22 +139,15 @@ def lompe_extract(model, m, los, apex, scan_time, darn_grid_stuff, use_cache=Tru
     # Electric potential
     e_pot_model = geom['pot_matrix_model'].dot(m)
 
-    # Data velocities and points. These are the only points that move between scans.
-    # vlos is unsigned, the sign is in the LOS unit vectors
-    v_e_geo_los, v_n_geo_los = los['vlos'] * los['le'], los['vlos'] * los['ln']
-    glons_los, glats_los = los['glon'], los['glat']
-    mlats_los, mlons_los = apex.geo2apex(glats_los, glons_los, 300)
-
     # Rotate all three sets of velocities into the magnetic frame
     v_e_model, v_n_model = _to_qd(geom['f_model'], v_e_geo_model, v_n_geo_model)
     v_e_darngrid, v_n_darngrid = _to_qd(geom['f_darngrid'], v_e_geo_darngrid, v_n_geo_darngrid)
-    v_e_los, v_n_los = _to_qd(apex.basevectors_qd(glats_los, glons_los, 300, coords='geo'),
-                              v_e_geo_los, v_n_geo_los)
+    v_e_los, v_n_los = _to_qd(los['f'], los['v_e_geo'], los['v_n_geo'])
 
     data = {'v_e_model': v_e_model, 'v_n_model': v_n_model,
             'mlats_model': geom['mlats_model'], 'mlons_model': geom['mlons_model'],
             'v_e_los': v_e_los, 'v_n_los': v_n_los, 'rids': los['rids'],
-            'mlats_los': mlats_los, 'mlons_los': mlons_los,
+            'mlats_los': los['mlats'], 'mlons_los': los['mlons'],
             'v_e_darngrid': v_e_darngrid, 'v_n_darngrid': v_n_darngrid,
             'mlats_darngrid': geom['mlats_darngrid'], 'mlons_darngrid': geom['mlons_darngrid'],
             'e_pot_model': e_pot_model,
