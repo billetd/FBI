@@ -88,7 +88,10 @@ def _build_geometry_cache(scan_lompe, apex, darn_grid_stuff):
 def _to_qd(f, v_e_geo, v_n_geo):
     """
     Rotate geographic velocity components into the magnetic (quasi-dipole) frame using
-    apex base vectors. Richmond (1995) equations (7.12) and (7.13), but for velocities.
+    apex base vectors. The direction is the motion across the QD grid, from the gradients of
+    QD longitude and latitude (f2 x k and k x f1, F times g1 and g2 in Richmond (1995)
+    equations (6.3) and (6.4)). The QD grid lines aren't perpendicular, so projecting onto
+    f1 and f2 directly would skew the vectors. The speed is kept as the geographic speed.
 
     :param f: (f1, f2) tuple as returned by apexpy.Apex.basevectors_qd()
     :param v_e_geo: eastward velocity components
@@ -96,8 +99,13 @@ def _to_qd(f, v_e_geo, v_n_geo):
     :return: (v_e_mag, v_n_mag)
     """
     f1, f2 = f
-    return (f1[0] * v_e_geo + f1[1] * v_n_geo,
-            f2[0] * v_e_geo + f2[1] * v_n_geo)
+    v_e_mag = f2[1] * v_e_geo - f2[0] * v_n_geo
+    v_n_mag = -f1[1] * v_e_geo + f1[0] * v_n_geo
+
+    # Back to the geographic speed
+    speed_geo, speed_mag = np.hypot(v_e_geo, v_n_geo), np.hypot(v_e_mag, v_n_mag)
+    scale = np.divide(speed_geo, speed_mag, out=np.zeros_like(speed_mag), where=speed_mag != 0)
+    return v_e_mag * scale, v_n_mag * scale
 
 
 def lompe_extract(model, m, los, apex, scan_time, darn_grid_stuff, use_cache=True):
