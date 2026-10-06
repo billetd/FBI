@@ -4,11 +4,16 @@ import matplotlib.ticker as mticker
 import numpy as np
 import matplotlib.path as mpltPath
 from matplotlib import pyplot as plt
+from matplotlib.collections import LineCollection
 from polplot import Polarplot
+from polplot.polplot import datapath
 from shapely.geometry import MultiLineString
 
 # Coastlines in projected coordinates, keyed on the apex epoch, projection and window
 _coastline_cache = {}
+
+# Coastlines in magnetic coordinates for the polar plots, keyed on the apex epoch
+_polar_coastline_cache = {}
 
 
 def coastline_segments(apex, ot, path, window):
@@ -50,10 +55,39 @@ def coastline_segments(apex, ot, path, window):
     return segments
 
 
-def get_local_axis(apex):
+def polar_coastlines(pax, apex, time, **kwargs):
+    """
+    The same as pax.coastlines(time=time, mag=apex), but converting the coastlines to magnetic
+    coordinates once per apex epoch rather than for every plot
+    :param pax: polplot Polarplot
+    :param apex: apexpy.Apex object
+    :param time: datetime, for magnetic local time
+    :param kwargs: passed to the LineCollection
+    :return: LineCollection
     """
 
-    :return:
+    key = (apex.year, apex.refh)
+    if key not in _polar_coastline_cache:
+        coastlines = np.load(datapath + 'coastlines_50m.npz')
+        shapes = [coastlines[name] for name in coastlines]
+        mlat, mlon = apex.geo2apex(*np.concatenate(shapes, axis=1), apex.refh)
+        _polar_coastline_cache[key] = (mlat, mlon, np.cumsum([shape.shape[1] for shape in shapes])[:-1])
+    mlat, mlon, splits = _polar_coastline_cache[key]
+
+    # As polplot, including the conversion to degrees and back
+    lat, lon = mlat.copy(), apex.mlon2mlt(mlon, time) * 15
+    valid = lat > pax.minlat
+    lat[~valid], lon[~valid] = np.nan, np.nan
+    x, y = pax._latlt2xy(lat, lon / 15)
+
+    return pax.ax.add_collection(LineCollection(np.split(np.vstack((x, y)).T, splits), **kwargs))
+
+
+def get_local_axis(apex):
+    """
+    Orthographic axis over Canada, in magnetic coordinates
+    :param apex: apexpy.Apex object
+    :return: (ax, projection, 'mag', fig)
     """
 
     # Set the projection to orthographic
@@ -63,8 +97,6 @@ def get_local_axis(apex):
     # Set up the plot
     pos_lower = [-82, 56]
     pos_higher = [64, 71]
-    # pos_lower = [-82, 40]
-    # pos_higher = [50, 50]
     xs, ys, zs = ot.transform_points(ccrs.PlateCarree(), np.array((pos_lower[0], pos_lower[1])),
                                      np.array((pos_higher[0], pos_higher[1]))).T
 
@@ -85,19 +117,24 @@ def get_local_axis(apex):
 
     # Plot coastlines
     for x_coast, y_coast in coastline_segments(apex, ot, path, (xs[0], xs[1], ys[0], ys[1])):
-        # plt.fill(x_coast, y_coast, zorder=0, color='grey')  # Doesn't work right atm. Weird shapes.
         plt.plot(x_coast, y_coast, zorder=0, color='grey', linewidth=0.5, alpha=0.6)
     return ax, ot, 'mag', fig
 
 
 def get_polar_axis(time, apex):
+    """
+    Polar axis in magnetic latitude and local time
+    :param time: datetime, for magnetic local time
+    :param apex: apexpy.Apex object
+    :return: (polplot Polarplot, 'mlt', fig)
+    """
 
     fig = plt.figure()
     rect = [0.1, 0.1, 0.8, 0.8]
     ax = fig.add_axes(rect)
 
     pax = Polarplot(ax, minlat=50, linewidth=0.7)
-    pax.coastlines(time=time, mag=apex, linewidth=0.5, resolution='50m', color='grey', alpha=0.5)
+    polar_coastlines(pax, apex, time, linewidth=0.5, color='grey', alpha=0.5)
 
     lowlat_mlts = np.linspace(0, 24, num=360)
     lowlat_lats = np.zeros(360) + 50

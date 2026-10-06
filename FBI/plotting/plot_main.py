@@ -9,7 +9,7 @@ from FBI.plotting.axis import get_local_axis, get_polar_axis
 from FBI.plotting.plot import plot_noon_line, plot_vecs_model_darn_grid, plot_potential_contours, plot_data_locs, \
     plot_boundary_box
 
-# Use latex for rendering if install, fallback if not
+# Use latex for rendering if installed, fallback if not
 _USETEX = bool(shutil.which('latex') and shutil.which('dvipng'))
 
 # font fallback
@@ -22,156 +22,146 @@ _DPI = 150
 _SUFFIX = '.webp'
 _SAVE_KWARGS = {'lossless': True, 'method': 4}
 
-def lompe_scan_plot_vectors(lompe, path=None, save=True, apex=None):
+# The start of each kind's image name. extras.plot_fbi_files() relies on these.
+PREFIXES = {'vectors': 'vecs_', 'potential': 'pot_', 'potential_polar': 'polar_pot_'}
+
+
+def scan_time(lompe):
+    """
+    :param lompe: dict - One record from readwrite.fbi_load_hdf5()
+    :return: datetime of the scan
     """
 
-    :param path:
-    :param lompe:
-    :param save:
+    return dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
+                       lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
+
+
+def _plot(kind, draw, lompe, path, save, apex):
+    """
+    The parts common to every kind of plot: skip it if the image already exists, draw it, and save it
+    :param kind: str - a key of PREFIXES
+    :param draw: function(lompe, time, apex) that draws the plot and returns (fig, ax, ot)
+    :param lompe: dict - One record from readwrite.fbi_load_hdf5()
+    :param path: str - Directory to save the image in, or None
+    :param save: True or False - Save and close the plot, or return it
     :param apex: apexpy.Apex object to use. One is made from the scan time if not given
-    :return:
+    :return: (fig, ax, ot, plt) if not saving, otherwise Nones
     """
 
-    plt.rcParams['text.usetex'] = _USETEX
-    scan_time = dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
-                            lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
+    time = scan_time(lompe)
 
+    save_path = None
     if path is not None:
-        save_path = path + scan_time.strftime("vecs_%Y-%m-%d_%H%M%S") + _SUFFIX
-        if pathy.isfile(save_path) is False:  # Check plot doesn't already exist
-            go = True
-        else:
-            go = False
+        save_path = path + time.strftime(PREFIXES[kind] + "%Y-%m-%d_%H%M%S") + _SUFFIX
+        if pathy.isfile(save_path):  # Check plot doesn't already exist
+            print('Allready processed: ' + save_path)
+            return None
+
+    if apex is None:
+        apex = apexpy.Apex(time, refh=300)
+
+    fig, ax, ot = draw(lompe, time, apex)
+
+    if save is True:
+        plt.savefig(save_path, dpi=_DPI, bbox_inches='tight', pil_kwargs=_SAVE_KWARGS)
+        plt.close('all')
+        return None, None, None, None
     else:
-        go = True
-
-    if go is True:
-        # Apex coordinate stuff
-        if apex is None:
-            apex = apexpy.Apex(scan_time, refh=300)
-
-        # Local axis over Canada
-        ax, ot, coord, fig = get_local_axis(apex)
-        plt.title(scan_time.strftime("%Y-%m-%d %H:%M:%S"))
-
-        # Line indicating the MLT noon direction
-        plot_noon_line(apex, scan_time, coord=coord)
-
-        # Oplot model velocity vectors at grid locations
-        plot_vecs_model_darn_grid(lompe, ax, coord=coord)
-
-        if save is True:
-            plt.savefig(save_path, dpi=_DPI, bbox_inches='tight', pil_kwargs=_SAVE_KWARGS)
-            plt.close('all')
-            return None, None, None, None
-        else:
-            return fig, ax, ot, plt
-    else:
-        print('Allready processed: ' + save_path)
+        return fig, ax, ot, plt
 
 
-def lompe_scan_plot_potential(lompe, path, save=True, apex=None):
-    """
-
-    :param path:
-    :param lompe:
-    :param save:
-    :param apex: apexpy.Apex object to use. One is made from the scan time if not given
-    :return:
-    """
+def _draw_vectors(lompe, time, apex):
 
     plt.rcParams['text.usetex'] = _USETEX
 
-    scan_time = dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
-                            lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
-    if path is not None:
-        save_path = path + scan_time.strftime("pot_%Y-%m-%d_%H%M%S") + _SUFFIX
-        if pathy.isfile(save_path) is False:  # Check plot doesn't already exist
-            go = True
-        else:
-            go = False
-    else:
-        go = True
+    # Local axis over Canada
+    ax, ot, coord, fig = get_local_axis(apex)
+    plt.title(time.strftime("%Y-%m-%d %H:%M:%S"))
 
-    if go is True:
-        # Apex coordinate stuff
-        if apex is None:
-            apex = apexpy.Apex(scan_time, refh=300)
+    # Line indicating the MLT noon direction
+    plot_noon_line(apex, time, coord=coord)
 
-        # Local axis over Canada
-        ax, ot, coord, fig = get_local_axis(apex)
-        plt.title(scan_time.strftime("%Y-%m-%d %H:%M:%S"))
+    # Oplot model velocity vectors at grid locations
+    plot_vecs_model_darn_grid(lompe, ax, coord=coord)
 
-        # Line indicating the MLT noon direction
-        plot_noon_line(apex, scan_time, coord=coord)
-
-        # Electric potentials
-        plot_potential_contours(lompe, ot, apex, scan_time, coord='mag')
-
-        # Locations of SuperDARN data
-        plot_data_locs(lompe, ax, apex=None, time=None, coord=coord)
-
-        if save is True:
-            plt.savefig(save_path, dpi=_DPI, bbox_inches='tight', pil_kwargs=_SAVE_KWARGS)
-            plt.close('all')
-            return None, None, None, None
-        else:
-            return fig, ax, ot, plt
-    else:
-        print('Allready processed: ' + save_path)
+    return fig, ax, ot
 
 
-def lompe_scan_plot_potential_polar(lompe, path, save=True, apex=None):
-    """
+def _draw_potential(lompe, time, apex):
 
-    :param path:
-    :param lompe:
-    :param save:
-    :param apex: apexpy.Apex object to use. One is made from the scan time if not given
-    :return:
-    """
+    plt.rcParams['text.usetex'] = _USETEX
+
+    # Local axis over Canada
+    ax, ot, coord, fig = get_local_axis(apex)
+    plt.title(time.strftime("%Y-%m-%d %H:%M:%S"))
+
+    # Line indicating the MLT noon direction
+    plot_noon_line(apex, time, coord=coord)
+
+    # Electric potentials
+    plot_potential_contours(lompe, ot, apex, time, coord='mag')
+
+    # Locations of SuperDARN data
+    plot_data_locs(lompe, ax, apex=None, time=None, coord=coord)
+
+    return fig, ax, ot
+
+
+def _draw_potential_polar(lompe, time, apex):
 
     # Without latex. polplot turns it on when imported, so this has to be set.
     plt.rcParams['text.usetex'] = False
 
-    scan_time = dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
-                            lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
+    # Global polar axis
+    ax, coord, fig = get_polar_axis(time, apex)
+    plt.title(time.strftime("%Y-%m-%d %H:%M:%S"))
 
-    if path is not None:
-        save_path = path + scan_time.strftime("polar_pot_%Y-%m-%d_%H%M%S") + _SUFFIX
-        if pathy.isfile(save_path) is False:  # Check plot doesn't already exist
-            go = True
-        else:
-            go = False
-    else:
-        go = True
+    # Electric potentials
+    plot_potential_contours(lompe, ax, apex, time, coord='mlt')
 
-    if go is True:
-        # Apex coordinate stuff
-        if apex is None:
-            apex = apexpy.Apex(scan_time, refh=300)
+    # Locations of SuperDARN data
+    plot_data_locs(lompe, ax, apex=apex, time=time, coord=coord)
 
-        # Global polar axis
-        ax, coord, fig = get_polar_axis(scan_time, apex)
-        plt.title(scan_time.strftime("%Y-%m-%d %H:%M:%S"))
+    # Boundary box
+    plot_boundary_box(lompe, ax, apex, time)
 
-        # Electric potentials
-        plot_potential_contours(lompe, ax, apex, scan_time, coord='mlt')
+    return fig, ax, None
 
-        # Locations of SuperDARN data
-        plot_data_locs(lompe, ax, apex=apex, time=scan_time, coord=coord)
 
-        # Boundary box
-        plot_boundary_box(lompe, ax, apex, scan_time)
+def lompe_scan_plot_vectors(lompe, path=None, save=True, apex=None):
+    """
+    Fit velocity vectors on the SuperDARN equal area grid, over Canada
+    :param lompe: dict - One record from readwrite.fbi_load_hdf5()
+    :param path: str - Directory to save the image in
+    :param save: True or False - Save and close the plot, or return (fig, ax, ot, plt)
+    :param apex: apexpy.Apex object to use. One is made from the scan time if not given
+    """
 
-        if save is True:
-            plt.savefig(save_path, dpi=_DPI, bbox_inches='tight', pil_kwargs=_SAVE_KWARGS)
-            plt.close('all')
-            return None, None, None, None
-        else:
-            return fig, ax, None, plt
-    else:
-        print('Allready processed: ' + save_path)
+    return _plot('vectors', _draw_vectors, lompe, path, save, apex)
+
+
+def lompe_scan_plot_potential(lompe, path, save=True, apex=None):
+    """
+    Electric potential contours and data locations, over Canada
+    :param lompe: dict - One record from readwrite.fbi_load_hdf5()
+    :param path: str - Directory to save the image in
+    :param save: True or False - Save and close the plot, or return (fig, ax, ot, plt)
+    :param apex: apexpy.Apex object to use. One is made from the scan time if not given
+    """
+
+    return _plot('potential', _draw_potential, lompe, path, save, apex)
+
+
+def lompe_scan_plot_potential_polar(lompe, path, save=True, apex=None):
+    """
+    Electric potential contours, data locations and the fit boundary, on a polar plot in MLT
+    :param lompe: dict - One record from readwrite.fbi_load_hdf5()
+    :param path: str - Directory to save the image in
+    :param save: True or False - Save and close the plot, or return (fig, ax, None, plt)
+    :param apex: apexpy.Apex object to use. One is made from the scan time if not given
+    """
+
+    return _plot('potential_polar', _draw_potential_polar, lompe, path, save, apex)
 
 
 _PLOT_FUNCS = {'vectors': lompe_scan_plot_vectors,
@@ -212,15 +202,15 @@ def plot_records(records, path, cores=None, kind='vectors'):
     cores = min(resolve_cores(cores), n_total)
 
     # One apex for the whole run. Every record in a file shares an epoch.
-    first = records[0]
-    apex = apexpy.Apex(dt.datetime(first['scan_year'][0], first['scan_month'][0], first['scan_day'][0],
-                                   first['scan_hour'][0], first['scan_minute'][0], first['scan_second'][0]),
-                       refh=300)
+    first = scan_time(records[0]).replace(microsecond=0)
+    apex = apexpy.Apex(first, refh=300)
 
     _shared.update(records=records, path=path, kind=kind, apex=apex)
 
     # Project the coastlines here, so the workers inherit them
-    if kind != 'potential_polar':
+    if kind == 'potential_polar':
+        plt.close(get_polar_axis(first, apex)[2])
+    else:
         plt.close(get_local_axis(apex)[3])
 
     try:
