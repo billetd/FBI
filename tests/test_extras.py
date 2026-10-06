@@ -1,5 +1,5 @@
 import datetime as dt
-from FBI.extras import _day_files, _hour_chunks
+from FBI.extras import _day_files, _hour_chunks, _existing_start_hours
 
 
 def test_day_files_and_chunks():
@@ -15,3 +15,14 @@ def test_day_files_and_chunks():
 
     chunks = _hour_chunks(files, day, 2)
     assert [(start.hour, end.hour, len(chunk)) for start, end, chunk in chunks] == [(0, 2, 1), (2, 4, 1), (18, 20, 2)]
+
+
+def test_existing_start_hours(tmp_path):
+    for start in (dt.datetime(2025, 1, 1, 0), dt.datetime(2025, 1, 1, 2), dt.datetime(2025, 1, 10, 20)):
+        end = start + dt.timedelta(hours=2)
+        (tmp_path / ('FBI_' + start.strftime('%Y%m%d%H%M%S') + '_' + end.strftime('%Y%m%d%H%M%S') + '.hdf5')).touch()
+
+    # Jan 1's files used to look like Jan 10's 00:00 and 20:00, and Jan 10's like Jan 1's 00:00 and 02:00
+    assert sorted(_existing_start_hours(str(tmp_path) + '/', dt.datetime(2025, 1, 1))) == [0, 2]
+    assert _existing_start_hours(str(tmp_path) + '/', dt.datetime(2025, 1, 10)) == [20]
+    assert _existing_start_hours(str(tmp_path) + '/', dt.datetime(2025, 1, 11)) == []

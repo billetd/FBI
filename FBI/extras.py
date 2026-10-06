@@ -126,10 +126,8 @@ def _existing_start_hours(output_dir, date):
     :return: list[int] - Start hours of the FBI files already there for that day
     """
 
-    pattern = r"FBI_" + str(date.year) + r"0?" + str(date.month) + r"0?" + str(date.day) + r"(\d{2}).*"
-    matches = (re.search(pattern, file) for file in glob(output_dir + '*.hdf5'))
-
-    return [int(match.group(1)) for match in matches if match]
+    spans = [_fbi_file_span(file) for file in glob(output_dir + '*.hdf5')]
+    return [start.hour for start, _ in filter(None, spans) if start.date() == date.date()]
 
 
 def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.datetime], cores: int, scandelta_override=6,
