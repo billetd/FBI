@@ -13,7 +13,7 @@ pip install git+https://github.com/billetd/FBI.git
 
 All pre-requisites will be installed, if they are not already. 
 
-**Important note:** A special forked branch of Lompe is installed, with some small changes to make FBI work properly. If you already have `Lompe` installed in the enviroment you are using `FBI`, uninstall before installing `FBI`. I recommend a fresh virtual enviroment.
+FBI uses the main branches of [lompe](https://github.com/klaundal/lompe) and [geodarn](https://github.com/RemingtonRohel/geodarn). If you previously installed FBI with the forked versions of these, reinstall them (or use a fresh virtual enviroment).
 
 # Creating an FBI output file
 
