@@ -8,14 +8,13 @@ import FBI.fitacf as fitacf
 import FBI.process as process
 import gc
 
+
 def simple_process():
 
     # Locations of files to read
     # Make sure the list of files are only the ones you need, not all your SuperDARN data,
     # otherwise it will read in everything
-    # fitacf_dir = '/Users/danielbillett/Data/fbi_dev/test_aligning_records/fitacfs'
     fitacf_dir = '/Volumes/The Box/FBI/test/fitacfs/2025/01'
-    # fitacf_dir = '/Users/danielbillett/Data/FBI/test_data/fitacfs/2025/02'
     fitacf_files = glob.glob(fitacf_dir+'/*.fitacf*')
 
     # Where to save the lompe outputs
@@ -23,8 +22,6 @@ def simple_process():
 
     # Times to process between
     # Make sure these times are actually in the fitacfs you have
-    # start_time = dt.datetime(2025, 2, 24, 18, 0)
-    # end_time = dt.datetime(2025, 2, 24, 18, 10)
     start_time = dt.datetime(2025, 1, 31, 20, 0)
     end_time = dt.datetime(2025, 1, 31, 20, 10)
 
@@ -34,7 +31,6 @@ def simple_process():
     # Go and do the rest of the processing
     process.process(all_data, [start_time, end_time], lompe_dir, cores=5, med_filter=True,
                     scandelta_override=7)
-    # 7
 
 
 def dailies_between_dates():
