@@ -30,7 +30,7 @@ The HDF5 file created contains the Lompe fits to the SuperDARN data used as inpu
 | `v_e_darngrid`, `v_n_darngrid`, `mlats_darngrid`, `mlons_darngrid` | Fit velocity on the SuperDARN equal area grid |
 | `v_e_los`, `v_n_los`, `mlats_los`, `mlons_los`, `rids` | The line-of-sight velocities that went into the fit, and the station id of each |
 | `bound_mlats`, `bound_mlons` | Boundary of the fit |
-| `scan_year` ... `scan_second`, `scan_millisec` | Time of the scan (`scan_millisec` holds microseconds) |
+| `scan_year` ... `scan_second`, `scan_millisec` | Time of the scan |
 
 Velocities and potentials are compressed with HDF5's scale-offset filter, keeping them to within 0.5 m/s and 0.5 V. Read them back with `FBI.readwrite.fbi_load_hdf5()`. See [readwrite.py](FBI/readwrite.py) for more.
 
