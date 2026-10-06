@@ -50,7 +50,7 @@ def forked_pool(cores):
         )
 
     # Only the calling thread survives a fork, so a lock held by any other thread stays
-    # locked forever in the workers. Nothing in FBI makes threads, but a library might.
+    # locked forever in the workers. FBI's own threads have finished by now, but a library's might not.
     if threading.active_count() > 1:
         warnings.warn(
             f'Forking a worker pool while {threading.active_count()} threads are '

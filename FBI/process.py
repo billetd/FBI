@@ -23,7 +23,7 @@ _shared = {}
 
 def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandelta_override=None, range_times=None):
     """
-    :param all_data: list[dict] - List of dictionaries containing fitacf data read in with fitacf.read_fitacfs()
+    :param all_data: list[list[dict]] - Records of each radar, read in with fitacf.read_fitacfs()
     :param timerange: list[datetime] - Start and end times
     :param lompe_dir: str - Directory to save FBI output file
     :param cores: int - Number of worker processes. None uses every CPU available. Choose 1
@@ -45,7 +45,7 @@ def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandel
         # Get scan times within timerange, based on whichever radar started earlier
         # Run the old way if using "scanning data", or the new way if using widebeam data
         if all_data[0][1]['scan'] == 0:
-            scan_times, range_times, scan_delta = get_scan_times_old(all_data, timerange)
+            _, range_times, scan_delta = get_scan_times_old(all_data, timerange)
         else:
             range_times, scan_delta = get_scan_times_widebeam(all_data, timerange)
 
