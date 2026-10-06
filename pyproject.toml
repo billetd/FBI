@@ -9,6 +9,7 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy < 2.3.0",
     "scipy",
+    "ppigrf",
     "apexpy >= 2.1.1",
     "h5py",
     "matplotlib",

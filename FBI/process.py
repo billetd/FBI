@@ -2,9 +2,6 @@
 This module contains code for creating lompe fits between a given timerange, using the already read in
 SuperDARN data
 """
-import warnings
-# Suppress RuntimeWarnings due to not calculating conductances (np.linalg)
-warnings.filterwarnings('ignore', category=RuntimeWarning, module='numpy')
 import apexpy
 import lompe
 import datetime as dt
@@ -88,8 +85,8 @@ def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandel
     canada_grid = lompe_grid_canada(apex)
     del apex # No longer needed
 
-    # Create Emodel object. Pass grid and Hall/Pedersen conductance functions
-    model = lompe.Emodel(canada_grid, Hall_Pedersen_conductance=None, ew_regularization_limit=(50, 75))
+    # Cut down lompe model, with the regularisation used for every fit
+    model = inversion.Model(canada_grid, l1=10, l2=0.1, ew_regularization_limit=(50, 75))
     del canada_grid  # No longer needed
 
     # Build everything the workers need before forking, so they share it rather than
@@ -136,13 +133,13 @@ def _prime_shared_state(range_times, all_data_iterable, scan_delta, darn_grid_st
     :param scan_delta: int - seconds of data to gather around each scan
     :param darn_grid_stuff: dict from FBI.grid.sdarn_grid()
     :param med_filter: True or False
-    :param model: lompe Emodel
+    :param model: FBI.inversion.Model
     :param cache_geometry: True or False
     """
 
     global _worker_apex
 
-    # Must come after the Emodel is built. Emodel makes its own Apex at epoch 2015, and
+    # Must come after the model is built. The model makes its own Apex at epoch 2015, and
     # apexpy holds the epoch in Fortran state shared by every Apex in the process, so
     # building ours last puts the epoch back to the one the data wants.
     _worker_apex = apexpy.Apex(range_times[0], refh=300)
@@ -150,10 +147,7 @@ def _prime_shared_state(range_times, all_data_iterable, scan_delta, darn_grid_st
     if cache_geometry:
         readwrite.prime_geometry_cache(model, _worker_apex, darn_grid_stuff)
 
-    # Parts of the inversion that are the same for every scan
-    inversion_setup = inversion.prepare_inversion(model)
-
-    _freeze_arrays(list(vars(model).values()) + list(inversion_setup.values()))
+    _freeze_arrays(vars(model).values())
 
     _shared.update(range_times=range_times,
                    all_data_iterable=all_data_iterable,
@@ -161,7 +155,6 @@ def _prime_shared_state(range_times, all_data_iterable, scan_delta, darn_grid_st
                    darn_grid_stuff=darn_grid_stuff,
                    med_filter=med_filter,
                    model=model,
-                   inversion_setup=inversion_setup,
                    cache_geometry=cache_geometry)
 
 
@@ -220,15 +213,17 @@ def _lompe_one_scan(index):
     if vlos.size == 0:
         return None
 
-    # Run lompe
-    m, used = inversion.solve_los(model, _shared['inversion_setup'], glon, glat, vlos, le, ln, vlos_err)
-
-    if m is None:
+    # Same data selection as lompe: drop NaNs, then anything outside biggrid
+    used = np.isfinite(vlos)
+    used[used] = model.biggrid.ingrid(glon[used], glat[used])
+    if used.sum() <= 1:
         return None
-
-    # Only the data that went into the fit
     los = {'glat': glat[used], 'glon': glon[used], 'vlos': vlos[used],
            'le': le[used], 'ln': ln[used], 'rids': rid[used]}
+
+    # Run lompe
+    G = model.los_matrix(los['glon'], los['glat'], los['le'], los['ln'])
+    m = model.solve(G, los['glon'], los['glat'], los['vlos'], vlos_err[used])
 
     return lompe_extract(model, m, los, _worker_apex, scan_time, _shared['darn_grid_stuff'],
                          use_cache=_shared['cache_geometry'])

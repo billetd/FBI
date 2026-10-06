@@ -1,7 +1,6 @@
 import numpy as np
 import h5py
 import datetime as dt
-from secsy import get_SECS_J_G_matrices
 
 # Cache of the geometry that does not change between scans, built once and then inherited
 # by the workers. See _build_geometry_cache() for what goes in it.
@@ -11,8 +10,8 @@ _geometry_cache = None
 def prime_geometry_cache(model, apex, darn_grid_stuff):
     """
     Build the static geometry up front, so the workers inherit it rather than each
-    building its own. Everything it needs is on the Emodel before any inversion is run.
-    :param model: lompe Emodel, used only for its grids
+    building its own.
+    :param model: FBI.inversion.Model
     :param apex: apexpy.Apex object
     :param darn_grid_stuff: dict from FBI.grid.sdarn_grid()
     """
@@ -36,7 +35,7 @@ def _build_geometry_cache(scan_lompe, apex, darn_grid_stuff):
     Precompute everything in lompe_extract() that depends only on the Lompe grid and the
     SuperDARN grid, not on the data of a particular scan.
 
-    :param scan_lompe: lompe Emodel, used only for its grids
+    :param scan_lompe: FBI.inversion.Model
     :param apex: apexpy.Apex object
     :param darn_grid_stuff: dict from FBI.grid.sdarn_grid()
     :return: dict of cached arrays
@@ -73,13 +72,9 @@ def _build_geometry_cache(scan_lompe, apex, darn_grid_stuff):
         'f_model': apex.basevectors_qd(glats_model, glons_model, 300, coords='geo'),
         'f_darngrid': apex.basevectors_qd(glats_darngrid, glons_darngrid, 300, coords='geo'),
         # SECS matrices. v() and E_pot() are just these dotted with the model vector.
-        'v_matrix_model': scan_lompe._v_matrix(),
-        'v_matrix_darngrid': scan_lompe._v_matrix(lon=glons_darngrid, lat=glats_darngrid),
-        'pot_matrix_model': get_SECS_J_G_matrices(scan_lompe.lat_J, scan_lompe.lon_J,
-                                                  scan_lompe.lat_E, scan_lompe.lon_E,
-                                                  current_type='potential',
-                                                  RI=scan_lompe.R,
-                                                  singularity_limit=scan_lompe.secs_singularity_limit),
+        'v_matrix_model': scan_lompe.v_matrix(),
+        'v_matrix_darngrid': scan_lompe.v_matrix(glons_darngrid, glats_darngrid),
+        'pot_matrix_model': scan_lompe.potential_matrix(),
     }
 
     return cache
@@ -112,8 +107,8 @@ def lompe_extract(model, m, los, apex, scan_time, darn_grid_stuff, use_cache=Tru
     """
     Code to extract potentials and velocities at good points for later plotting
     These are the values saved to HDF5 later in fbi_write_hdf5()
-    :param model: lompe Emodel, used only for its grids
-    :param m: model vector from FBI.inversion.solve_los()
+    :param model: FBI.inversion.Model
+    :param m: model vector from FBI.inversion.Model.solve()
     :param los: dict of the data that went into the fit: 'glat', 'glon', 'vlos', 'le', 'ln'
                 and 'rids'
     :param apex:
