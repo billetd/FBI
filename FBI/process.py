@@ -21,7 +21,7 @@ from FBI.readwrite import lompe_extract, FBIWriter
 _shared = {}
 
 
-def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandelta_override=None, range_times=None):
+def process(all_data, timerange, lompe_dir, cores=1, med_filter=True, scandelta_override=None, range_times=None):
     """
     :param all_data: list[list[dict]] - Records of each radar, read in with fitacf.read_fitacfs()
     :param timerange: list[datetime] - Start and end times
