@@ -213,7 +213,7 @@ def _lompe_one_scan(index):
     model = _shared['model']
 
     # Get data position/value arrays for Lompe
-    glat, glon, _, _, le, ln, le_mag, ln_mag, vlos, vlos_err, rid, _, _ = (
+    glat, glon, _, _, le, ln, _, _, vlos, vlos_err, rid, _, _ = (
         get_lompe_data_arrs(_worker_apex, all_data, scan_time, _shared['scan_delta'],
                             med_filter=_shared['med_filter']))
 
@@ -228,7 +228,7 @@ def _lompe_one_scan(index):
 
     # Only the data that went into the fit
     los = {'glat': glat[used], 'glon': glon[used], 'vlos': vlos[used],
-           'le_mag': le_mag[used], 'ln_mag': ln_mag[used], 'rids': rid[used]}
+           'le': le[used], 'ln': ln[used], 'rids': rid[used]}
 
     return lompe_extract(model, m, los, _worker_apex, scan_time, _shared['darn_grid_stuff'],
                          use_cache=_shared['cache_geometry'])

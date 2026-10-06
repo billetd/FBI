@@ -106,8 +106,8 @@ def lompe_extract(model, m, los, apex, scan_time, darn_grid_stuff, use_cache=Tru
     These are the values saved to HDF5 later in fbi_write_hdf5()
     :param model: lompe Emodel, used only for its grids
     :param m: model vector from FBI.inversion.solve_los()
-    :param los: dict of the data that went into the fit: 'glat', 'glon', 'vlos', 'le_mag',
-                'ln_mag' and 'rids'
+    :param los: dict of the data that went into the fit: 'glat', 'glon', 'vlos', 'le', 'ln'
+                and 'rids'
     :param apex:
     :param scan_time:
     :param darn_grid_stuff:
@@ -137,7 +137,8 @@ def lompe_extract(model, m, los, apex, scan_time, darn_grid_stuff, use_cache=Tru
     e_pot_model = geom['pot_matrix_model'].dot(m)
 
     # Data velocities and points. These are the only points that move between scans.
-    v_e_geo_los, v_n_geo_los = los['vlos'] * los['le_mag'], los['vlos'] * los['ln_mag']
+    # vlos is unsigned, the sign is in the LOS unit vectors
+    v_e_geo_los, v_n_geo_los = los['vlos'] * los['le'], los['vlos'] * los['ln']
     glons_los, glats_los = los['glon'], los['glat']
     mlats_los, mlons_los = apex.geo2apex(glats_los, glons_los, 300)
 
