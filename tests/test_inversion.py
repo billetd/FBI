@@ -55,8 +55,8 @@ def test_matches_stock_run_inversion(model, emodel):
     lon, lat, vlos, le, ln, error = los_data(400)
 
     used = model.biggrid.ingrid(lon, lat)
-    m = model.solve(model.los_matrix(lon[used], lat[used], le[used], ln[used]),
-                    lon[used], lat[used], vlos[used], error[used])
+    G = model.los_matrix(lon[used], lat[used], le[used], ln[used])
+    m = model.solve(G, np.arange(used.sum()), lon[used], lat[used], vlos[used], error[used])
 
     emodel.clear_model()
     emodel.add_data(lompe.Data(vlos, coordinates=np.vstack((lon, lat)), LOS=np.vstack((le, ln)),
@@ -70,3 +70,18 @@ def test_matches_stock_run_inversion(model, emodel):
 
     # Same model vector
     np.testing.assert_allclose(m, emodel.m, rtol=1e-10, atol=1e-10 * np.max(np.abs(emodel.m)))
+
+
+def test_shared_rows(model):
+    lon, lat, vlos, le, ln, error = los_data(400, seed=1)
+    lon, lat, le, ln = lon[5:], lat[5:], le[5:], ln[5:]
+
+    # Each point measured three times, as when a gate has scatter in more than one record of a scan
+    rows = np.repeat(np.arange(lon.size), 3)
+    d, e = np.abs(np.random.default_rng(2).normal(0, 500, rows.size)), error[5:][rows]
+    G = model.los_matrix(lon, lat, le, ln)
+
+    shared = model.solve(G, rows, lon[rows], lat[rows], d, e)
+    separate = model.solve(G[rows], np.arange(rows.size), lon[rows], lat[rows], d, e)
+
+    np.testing.assert_allclose(shared, separate, rtol=1e-10, atol=1e-10 * np.max(np.abs(separate)))

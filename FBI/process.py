@@ -211,7 +211,7 @@ def _lompe_one_scan(index):
     lon, lat = gates.lon[gate], gates.lat[gate]
 
     # Run lompe
-    m = model.solve(geometry['G'][row], lon, lat, vlos, vlos_err)
+    m = model.solve(geometry['G'], row, lon, lat, vlos, vlos_err)
 
     los_data = {'v_e_geo': vlos * gates.le[gate], 'v_n_geo': vlos * gates.ln[gate],
                 'mlats': geometry['mlat'][row], 'mlons': geometry['mlon'][row],

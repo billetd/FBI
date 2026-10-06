@@ -161,10 +161,11 @@ def _scan_records(windows, scan_time, scan_delta):
 def scan_tables(windows, scan_time, scan_delta):
     """
     The gate tables scan_los() needs for a scan, so they can be built in advance
-    :return: set of Gates.table() arguments
+    :return: list of Gates.table() arguments, in the order the data uses them. Not a set, whose
+             order changes between runs, so the gates are numbered the same every time.
     """
 
-    return {table for _, _, _, table in _scan_records(windows, scan_time, scan_delta)}
+    return list(dict.fromkeys(table for _, _, _, table in _scan_records(windows, scan_time, scan_delta)))
 
 
 def scan_los(gates, windows, scan_time, scan_delta, med_filter=False):

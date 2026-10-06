@@ -69,6 +69,7 @@ class Model:
             self.LTL += l1 * LTL_l1 / np.median(LTL_l1.diagonal())
         if l2 > 0:
             self.LTL += l2 * LTLe / np.median(LTLe.diagonal())
+        self.LTL = np.asfortranarray(self.LTL)  # LAPACK's order, so solve() doesn't need a copy
 
         # Expanded grid for calculation of data density, as in run_inversion()
         self.biggrid = cs.CSgrid(grid.projection,
@@ -113,10 +114,11 @@ class Model:
         Ve, Vn = self.v_matrix(lon, lat)
         return Ve * le.reshape((-1, 1)) + Vn * ln.reshape((-1, 1))
 
-    def solve(self, G, lon, lat, d, error):
+    def solve(self, G, rows, lon, lat, d, error):
         """
         Solve for the model vector, with data weighted inversely by their density
-        :param G: array - Data kernel, one row per point. See los_matrix()
+        :param G: array - Data kernel rows. See los_matrix()
+        :param rows: array of int - Row of G for each datum. Data from the same gate share a row.
         :param lon: array - Geographic longitudes of the data [degrees]
         :param lat: array - Geographic latitudes of the data [degrees]
         :param d: array - The data [m/s]
@@ -130,12 +132,18 @@ class Model:
         spatial_weight[i == -1] = 1
         w = spatial_weight * 1 / (error ** 2)
 
-        GTG = G.T.dot(G * w.reshape((-1, 1)))
-        GTd = G.T.dot(w * d)
-        GG = GTG + self.LTL * np.median(np.diagonal(GTG))
+        # Data sharing a row add up to that row with the sum of their weights, so each row only
+        # goes into G^T W G once. syrk only fills the lower triangle, which is all cho_factor reads.
+        rows, datum_row = np.unique(rows, return_inverse=True)
+        G = G[rows]
+        w_row = np.bincount(datum_row, weights=w)
+        GTG = scipy.linalg.blas.dsyrk(1., (G * np.sqrt(w_row).reshape((-1, 1))).T, lower=1)
+        GTd = G.T.dot(np.bincount(datum_row, weights=w * d))
+        regularisation = self.LTL * np.median(np.diagonal(GTG))
 
         try:
-            c, lower = scipy.linalg.cho_factor(GG, lower=True)
-            return scipy.linalg.cho_solve((c, lower), GTd)
+            c = scipy.linalg.cho_factor(GTG + regularisation, lower=True, overwrite_a=True)
+            return scipy.linalg.cho_solve(c, GTd)
         except scipy.linalg.LinAlgError:
-            return scipy.linalg.lstsq(GG, GTd, cond=None, lapack_driver='gelsy')[0]
+            GTG += np.tril(GTG, -1).T
+            return scipy.linalg.lstsq(GTG + regularisation, GTd, cond=None, lapack_driver='gelsy')[0]
