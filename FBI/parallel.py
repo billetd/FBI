@@ -5,6 +5,7 @@ This module contains code for spreading work across the cores of a single machin
 import gc
 import contextlib
 import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
 import os
 import threading
 import time
@@ -38,9 +39,10 @@ def resolve_cores(cores=None):
 def forked_pool(cores):
     """
     A pool of workers which inherit everything this process has already built, rather
-    than being sent a copy of it
+    than being sent a copy of it. If a worker dies, waiting on its work raises BrokenProcessPool,
+    where a multiprocessing.Pool would replace the worker and wait forever for the lost task.
     :param cores: int - number of worker processes
-    :return: context manager yielding a multiprocessing.Pool
+    :return: context manager yielding a concurrent.futures.ProcessPoolExecutor
     """
 
     if 'fork' not in multiprocessing.get_all_start_methods():
@@ -63,21 +65,20 @@ def forked_pool(cores):
     # already exists somewhere the collector never looks.
     gc.collect()
     gc.freeze()
-    pool = multiprocessing.get_context('fork').Pool(processes=cores)
+    pool = ProcessPoolExecutor(max_workers=cores, mp_context=multiprocessing.get_context('fork'))
     try:
         yield pool
     finally:
-        pool.terminate()
-        pool.join()
+        pool.shutdown(cancel_futures=True)
         gc.unfreeze()
 
 
 def bounded_imap(pool, func, n_items, window):
     """
     Map func over range(n_items), yielding (index, result) in order, with no more than
-    `window` tasks in flight. Pool.imap() buffers every result that comes back, so it
-    piles up if the consumer is slower than the workers.
-    :param pool: multiprocessing.Pool
+    `window` tasks in flight. pool.map() submits everything at once, so finished results
+    pile up if the consumer is slower than the workers.
+    :param pool: from forked_pool()
     :param func: module level function taking a single int
     :param n_items: int - number of items
     :param window: int - maximum tasks submitted but not yet collected
@@ -89,11 +90,11 @@ def bounded_imap(pool, func, n_items, window):
 
     while submitted < n_items or inflight:
         while submitted < n_items and len(inflight) < window:
-            inflight.append((submitted, pool.apply_async(func, (submitted,))))
+            inflight.append((submitted, pool.submit(func, submitted)))
             submitted += 1
 
         index, pending = inflight.popleft()
-        yield index, pending.get()
+        yield index, pending.result()
 
 
 def report_progress(done, total, started, every=20, unit='scans'):

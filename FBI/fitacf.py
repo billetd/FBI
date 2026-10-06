@@ -82,7 +82,8 @@ def read_fitacfs(fitacf_files, cores=None, start=None, end=None):
     else:
         # One file per worker
         with forked_pool(cores) as pool:
-            all_data = pool.starmap(sdarnreadmulti, [(inp, start, end) for inp in fitacf_files])
+            all_data = list(pool.map(sdarnreadmulti, fitacf_files, [start] * len(fitacf_files),
+                                     [end] * len(fitacf_files)))
 
     return [x for x in all_data if x]
 
