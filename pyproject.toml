@@ -34,6 +34,7 @@ deps-from-github = [
 extras = [
 ]
 dev = [
+    "pytest",
 ]
 
 [tool.setuptools.packages.find]

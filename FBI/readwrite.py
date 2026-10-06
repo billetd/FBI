@@ -100,15 +100,17 @@ def _to_qd(f, v_e_geo, v_n_geo):
             f2[0] * v_e_geo + f2[1] * v_n_geo)
 
 
-def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff, rids, use_cache=True):
+def lompe_extract(model, m, los, apex, scan_time, darn_grid_stuff, use_cache=True):
     """
     Code to extract potentials and velocities at good points for later plotting
     These are the values saved to HDF5 later in fbi_write_hdf5()
-    :param scan_lompe:
+    :param model: lompe Emodel, used only for its grids
+    :param m: model vector from FBI.inversion.solve_los()
+    :param los: dict of the data that went into the fit: 'glat', 'glon', 'vlos', 'le_mag',
+                'ln_mag' and 'rids'
     :param apex:
     :param scan_time:
     :param darn_grid_stuff:
-    :param rids: NOTE - I think this needs to be fixed to remove radars outside of lompe grid area
     :param use_cache: Reuse the static geometry between scans. Much faster, but holds a few
                       hundred MB of SECS matrices per process. Set False if RAM-limited.
     :return:
@@ -118,12 +120,10 @@ def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff, rids, use_cache=
 
     if use_cache:
         if _geometry_cache is None:
-            _geometry_cache = _build_geometry_cache(scan_lompe, apex, darn_grid_stuff)
+            _geometry_cache = _build_geometry_cache(model, apex, darn_grid_stuff)
         geom = _geometry_cache
     else:
-        geom = _build_geometry_cache(scan_lompe, apex, darn_grid_stuff)
-
-    m = scan_lompe.m
+        geom = _build_geometry_cache(model, apex, darn_grid_stuff)
 
     # Darngrid velocities
     Ve, Vn = geom['v_matrix_darngrid']
@@ -137,10 +137,8 @@ def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff, rids, use_cache=
     e_pot_model = geom['pot_matrix_model'].dot(m)
 
     # Data velocities and points. These are the only points that move between scans.
-    v_e_geo_los, v_n_geo_los = (scan_lompe.data['convection'][0].values * scan_lompe.data['convection'][0].los_mag[0],
-                                scan_lompe.data['convection'][0].values * scan_lompe.data['convection'][0].los_mag[1])
-    glons_los, glats_los = (scan_lompe.data['convection'][0].coords['lon'],
-                            scan_lompe.data['convection'][0].coords['lat'])
+    v_e_geo_los, v_n_geo_los = los['vlos'] * los['le_mag'], los['vlos'] * los['ln_mag']
+    glons_los, glats_los = los['glon'], los['glat']
     mlats_los, mlons_los = apex.geo2apex(glats_los, glons_los, 300)
 
     # Rotate all three sets of velocities into the magnetic frame
@@ -151,7 +149,7 @@ def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff, rids, use_cache=
 
     data = {'v_e_model': v_e_model, 'v_n_model': v_n_model,
             'mlats_model': geom['mlats_model'], 'mlons_model': geom['mlons_model'],
-            'v_e_los': v_e_los, 'v_n_los': v_n_los, 'rids': rids,
+            'v_e_los': v_e_los, 'v_n_los': v_n_los, 'rids': los['rids'],
             'mlats_los': mlats_los, 'mlons_los': mlons_los,
             'v_e_darngrid': v_e_darngrid, 'v_n_darngrid': v_n_darngrid,
             'mlats_darngrid': geom['mlats_darngrid'], 'mlons_darngrid': geom['mlons_darngrid'],

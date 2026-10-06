@@ -10,6 +10,7 @@ import lompe
 import datetime as dt
 import pydarn
 import FBI.grid as grid
+import FBI.inversion as inversion
 import FBI.readwrite as readwrite
 import gc
 import os
@@ -91,9 +92,6 @@ def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandel
     model = lompe.Emodel(canada_grid, Hall_Pedersen_conductance=None, ew_regularization_limit=(50, 75))
     del canada_grid  # No longer needed
 
-    # Build the data-density grid here rather than in every worker's first inversion
-    model.prepare_biggrid()
-
     # Build everything the workers need before forking, so they share it rather than
     # each being sent a copy
     _prime_shared_state(range_times, all_data_iterable, scan_delta, darn_grid_stuff,
@@ -152,7 +150,10 @@ def _prime_shared_state(range_times, all_data_iterable, scan_delta, darn_grid_st
     if cache_geometry:
         readwrite.prime_geometry_cache(model, _worker_apex, darn_grid_stuff)
 
-    _freeze_model_arrays(model)
+    # Parts of the inversion that are the same for every scan
+    inversion_setup = inversion.prepare_inversion(model)
+
+    _freeze_arrays(list(vars(model).values()) + list(inversion_setup.values()))
 
     _shared.update(range_times=range_times,
                    all_data_iterable=all_data_iterable,
@@ -160,23 +161,24 @@ def _prime_shared_state(range_times, all_data_iterable, scan_delta, darn_grid_st
                    darn_grid_stuff=darn_grid_stuff,
                    med_filter=med_filter,
                    model=model,
+                   inversion_setup=inversion_setup,
                    cache_geometry=cache_geometry)
 
 
-def _freeze_model_arrays(model, min_bytes=1 << 20):
+def _freeze_arrays(values, min_bytes=1 << 20):
     """
-    Mark the Emodel's large matrices read-only, so the workers share rather than copy them.
-    The inversion only rebinds these attributes, so nothing should be writing through them.
-    If something does, it raises instead of quietly diverging in one worker.
+    Mark large matrices read-only, so the workers share rather than copy them.
+    Nothing should be writing through them. If something does, it raises instead of
+    quietly diverging in one worker.
     Set FBI_FREEZE_MODEL=0 to skip.
-    :param model: lompe Emodel
+    :param values: objects to freeze, anything that isn't an array is skipped
     :param min_bytes: smallest array worth freezing
     """
 
     if os.environ.get('FBI_FREEZE_MODEL') == '0':
         return
 
-    for value in vars(model).values():
+    for value in values:
         if isinstance(value, np.ndarray) and value.nbytes >= min_bytes:
             try:
                 value.flags.writeable = False
@@ -210,27 +212,26 @@ def _lompe_one_scan(index):
     all_data = _shared['all_data_iterable'][index]
     model = _shared['model']
 
-    # Get the data in a format that Lompe likes
-    sd_data, rids = prepare_lompe_inputs(_worker_apex, all_data, scan_time,
-                                         _shared['scan_delta'], _shared['med_filter'])
+    # Get data position/value arrays for Lompe
+    glat, glon, _, _, le, ln, le_mag, ln_mag, vlos, vlos_err, rid, _, _ = (
+        get_lompe_data_arrs(_worker_apex, all_data, scan_time, _shared['scan_delta'],
+                            med_filter=_shared['med_filter']))
 
-    if sd_data is None:
+    if vlos.size == 0:
         return None
-
-    # The model is reused between scans, so drop the previous scan's data first
-    model.clear_model()
 
     # Run lompe
-    try:
-        scan_lompe = run_lompe_model(sd_data, model)
-    except IndexError:
+    m, used = inversion.solve_los(model, _shared['inversion_setup'], glon, glat, vlos, le, ln, vlos_err)
+
+    if m is None:
         return None
 
-    if scan_lompe is None:
-        return None
+    # Only the data that went into the fit
+    los = {'glat': glat[used], 'glon': glon[used], 'vlos': vlos[used],
+           'le_mag': le_mag[used], 'ln_mag': ln_mag[used], 'rids': rid[used]}
 
-    return lompe_extract(scan_lompe, _worker_apex, scan_time, _shared['darn_grid_stuff'],
-                         rids, use_cache=_shared['cache_geometry'])
+    return lompe_extract(model, m, los, _worker_apex, scan_time, _shared['darn_grid_stuff'],
+                         use_cache=_shared['cache_geometry'])
 
 
 def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter):
@@ -249,11 +250,10 @@ def prepare_lompe_inputs(apex, all_data, scan_time, scan_delta, med_filter):
 
     coords  = np.vstack((glon, glat))
     los     = np.vstack((le, ln))
-    los_mag = np.vstack((le_mag, ln_mag))
 
     # Make the Lompe data object
     try:
-        sd_data = lompe.Data(vlos, coordinates=coords, LOS=los, LOS_mag=los_mag,
+        sd_data = lompe.Data(vlos, coordinates=coords, LOS=los,
                              datatype='convection', error=vlos_err, iweight=1.0)
     except AttributeError:
         print('No data in this scan for some reason. Skipping...')
@@ -450,26 +450,3 @@ def get_lompe_data_arrs(apex, all_data, scan_time, scan_delta, med_filter=False)
             np.array(vlos), np.array(vlos_err), np.array(rid),
             np.array(ve_mag), np.array(vn_mag))
 
-
-def run_lompe_model(sd_data, model):
-    """
-    Segregated code to run the lompe model
-    """
-
-    # Add all the vectors to the model object
-    model.add_data(sd_data)
-
-    # Run inversion
-    # posterior=False skips Cmpost and Rmatrix, which cost ~4N^3 (N = grid_E.size) and are
-    # never read by lompe_extract - only the model vector is used.
-    # Needs the lompe fork at github.com/billetd/lompe. Stock lompe passes posterior
-    # through to scipy.linalg.lstsq, which raises TypeError on every scan.
-    try:
-        model.run_inversion(l1=10, l2=0.1, lapack_driver='gelsy', posterior=False)
-    except TypeError as err:
-        raise TypeError(
-            'run_inversion() rejected its arguments. FBI needs the lompe fork at '
-            'github.com/billetd/lompe, which takes posterior= and provides '
-            'prepare_biggrid().'
-        ) from err
-    return model
