@@ -87,9 +87,7 @@ def _file_hour(fitacf_file):
     if match[2] == '.':
         match = match.replace('.', '')
 
-    # Normalize times, easier to compare this way
-    file_hour = int(match)
-    return file_hour if file_hour >= 100 else file_hour * 100
+    return int(match)
 
 
 def _hour_chunks(files, date, hour_span):
@@ -104,17 +102,13 @@ def _hour_chunks(files, date, hour_span):
     files = [(file, _file_hour(file)) for file in files]
     chunks = []
 
-    index, hour = 0, 0
-    while index < len(files) and hour < 24:
+    for hour in range(0, 24, hour_span):
         start = date.replace(hour=hour)
         end_hour = min(hour + hour_span, 24)
-        chunk = [file for file, file_hour in files[index:] if hour * 100 <= file_hour < end_hour * 100]
+        chunk = [file for file, file_hour in files if hour * 100 <= file_hour < end_hour * 100]
 
         if chunk:
             chunks.append((start, start + dt.timedelta(hours=hour_span), chunk))
-
-        index += len(chunk)
-        hour += hour_span
 
     return chunks
 

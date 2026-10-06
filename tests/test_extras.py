@@ -7,14 +7,17 @@ def test_day_files_and_chunks():
              '/data/2025/02/20250224.18.00.03.sas.a.fitacf',
              '/data/2025/02/20250224.0000.00.inv.a.fitacf.bz2',
              '/data/2025/02/20250224.0200.00.inv.a.fitacf.bz2',
+             '/data/2025/02/20250224.0010.00.pgr.a.fitacf.bz2',
+             '/data/2025/02/20250224.00.30.00.cly.a.fitacf.bz2',
              '/data/2025/02/20250225.0000.00.inv.a.fitacf.bz2']
     day = dt.datetime(2025, 2, 24)
 
     files = _day_files(files, day)
-    assert len(files) == 4
+    assert len(files) == 6
 
+    # Files starting after 00:01 used to be given times of 10:00 and 30:00, and never read
     chunks = _hour_chunks(files, day, 2)
-    assert [(start.hour, end.hour, len(chunk)) for start, end, chunk in chunks] == [(0, 2, 1), (2, 4, 1), (18, 20, 2)]
+    assert [(start.hour, end.hour, len(chunk)) for start, end, chunk in chunks] == [(0, 2, 3), (2, 4, 1), (18, 20, 2)]
 
 
 def test_existing_start_hours(tmp_path):
