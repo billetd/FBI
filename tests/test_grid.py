@@ -1,9 +1,21 @@
+import datetime as dt
+import apexpy
 import numpy as np
-from geodarn.gridding import create_grid
-from FBI.grid import darn_grid_cell_index, DARN_GRID_LAT_MIN, DARN_GRID_LAT_WIDTH
+import pytest
+from FBI.grid import darn_grid_cell_index, equal_area_grid, sdarn_grid, DARN_GRID_LAT_MIN, DARN_GRID_LAT_WIDTH
 
-lat_divs_bottom, lon_divs, darn_grid = create_grid(DARN_GRID_LAT_MIN, DARN_GRID_LAT_WIDTH, 'north')
-max_num_lons = darn_grid.shape[1]
+lat_divs_bottom, lon_divs = equal_area_grid()
+row_start = np.cumsum([0] + [divs.size - 1 for divs in lon_divs])
+
+
+def test_same_grid_as_geodarn():
+    gridding = pytest.importorskip('geodarn.gridding')
+    lat_divs_geodarn, lon_divs_geodarn, _ = gridding.create_grid(DARN_GRID_LAT_MIN, DARN_GRID_LAT_WIDTH, 'north')
+
+    np.testing.assert_array_equal(lat_divs_bottom, lat_divs_geodarn)
+    assert len(lon_divs) == len(lon_divs_geodarn)
+    for ours, geodarns in zip(lon_divs, lon_divs_geodarn):
+        np.testing.assert_array_equal(ours, geodarns)
 
 
 def test_points_are_inside_their_cell():
@@ -14,24 +26,21 @@ def test_points_are_inside_their_cell():
     cells = darn_grid_cell_index(mlons, mlats)
 
     assert (cells >= 0).all()
-    rows, cols = cells // max_num_lons, cells % max_num_lons
+    rows = np.searchsorted(row_start, cells, side='right') - 1
+    cols = cells - row_start[rows]
     assert (lat_divs_bottom[rows] <= mlats).all()
     assert (mlats < lat_divs_bottom[rows] + DARN_GRID_LAT_WIDTH).all()
     lon_lo = np.array([lon_divs[r][c] for r, c in zip(rows, cols)])
     lon_hi = np.array([lon_divs[r][c + 1] for r, c in zip(rows, cols)])
     assert (lon_lo <= mlons).all() and (mlons < lon_hi).all()
-    assert not darn_grid.reshape(-1, 2).mask[cells].any()
 
 
 def test_cell_centres_map_to_their_own_cell():
-    flat = darn_grid.reshape(-1, 2)
-    # create_grid() leaves one unmasked (0, 0) entry at the end of each row, which isn't a cell
-    on_grid = ~flat.mask[:, 0] & (flat.data[:, 1] >= DARN_GRID_LAT_MIN)
-    centres = flat[on_grid].data
+    darn_grid = sdarn_grid(apexpy.Apex(dt.datetime(2025, 2, 24), refh=300))
 
-    cells = darn_grid_cell_index(centres[:, 0], centres[:, 1])
+    cells = darn_grid_cell_index(darn_grid['mlons_darngrid'], darn_grid['mlats_darngrid'])
 
-    np.testing.assert_array_equal(cells, np.flatnonzero(on_grid))
+    np.testing.assert_array_equal(cells, np.arange(row_start[-1]))
 
 
 def test_points_in_a_single_cell():
@@ -50,4 +59,4 @@ def test_points_off_the_grid():
 def test_longitude_wraps():
     cells = darn_grid_cell_index(np.array([180., -180., 540.]), np.array([70.5, 70.5, 70.5]))
 
-    assert cells[0] == cells[1] == cells[2] == 10 * max_num_lons
+    assert cells[0] == cells[1] == cells[2] == row_start[10]

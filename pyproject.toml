@@ -15,7 +15,6 @@ dependencies = [
     "matplotlib",
     "cartopy",
     "shapely",
-    "geodarn @ git+https://github.com/RemingtonRohel/geodarn.git@main",
     # Vectorised gate2geographic_location(), until SuperDARN/pydarn#450 is merged
     "pydarn @ git+https://github.com/SuperDARN/pydarn@ehn/gate2geo_vectorisation",
     "lompe @ git+https://github.com/klaundal/lompe.git@main",

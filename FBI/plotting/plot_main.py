@@ -131,7 +131,8 @@ def lompe_scan_plot_potential_polar(lompe, path, save=True, apex=None):
     :return:
     """
 
-    # plt.rcParams['text.usetex'] = True
+    # Without latex. polplot turns it on when imported, so this has to be set.
+    plt.rcParams['text.usetex'] = False
 
     scan_time = dt.datetime(lompe['scan_year'][0], lompe['scan_month'][0], lompe['scan_day'][0], lompe['scan_hour'][0],
                             lompe['scan_minute'][0], lompe['scan_second'][0], lompe['scan_millisec'][0])
