@@ -17,12 +17,11 @@ from FBI.parallel import resolve_cores, forked_pool, bounded_imap, report_progre
 from FBI.readwrite import lompe_extract, FBIWriter
 
 # Everything the workers read. Filled in before forking, so the workers inherit it and a
-# task is just a scan index. An Apex object can't be pickled, so this is also how they get one.
+# task is just a scan index.
 _shared = {}
 
 
-def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandelta_override=None, range_times=None,
-            cache_geometry=True):
+def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandelta_override=None, range_times=None):
     """
     :param all_data: list[dict] - List of dictionaries containing fitacf data read in with fitacf.read_fitacfs()
     :param timerange: list[datetime] - Start and end times
@@ -32,15 +31,12 @@ def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandel
     :param med_filter: True or False - Median filter the data before putting into Lompe
     :param scandelta_override: int - Time in seconds to gather data around scans
     :param range_times: list[datetime] - Custom "scan" intervals
-    :param cache_geometry: True or False - Reuse the SECS/apex matrices that depend only on the
-                           grids between scans. Much faster, and costs a few hundred MB for
-                           the run rather than per core.
     """
 
     cores = resolve_cores(cores)
 
     # Clear anything left by a previous call, e.g. from extras.process_date()
-    _reset_caches()
+    _shared.clear()
 
     # If no "range_times" is given, work it out based on input data
     # May produce silly scans if there is a mix of normal scan and other modes. Be cautious and only use
@@ -71,7 +67,7 @@ def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandel
 
     # Build everything the workers need before forking, so they share it rather than
     # each being sent a copy
-    _prime_shared_state(all_data, range_times, scan_delta, darn_grid_stuff, med_filter, model, cache_geometry)
+    _prime_shared_state(all_data, range_times, scan_delta, darn_grid_stuff, med_filter, model)
 
     n_total = len(range_times)
     cores = min(cores, max(1, n_total))  # No point in more workers than scans
@@ -97,11 +93,11 @@ def process(all_data, timerange, lompe_dir, cores=None, med_filter=True, scandel
             print('\nWrote ' + str(writer.n_written) + ' of ' + str(n_total) + ' scans')
     finally:
         # Drop the model and data before the caller moves on to the next chunk
-        _reset_caches()
+        _shared.clear()
         gc.collect()
 
 
-def _prime_shared_state(all_data, range_times, scan_delta, darn_grid_stuff, med_filter, model, cache_geometry):
+def _prime_shared_state(all_data, range_times, scan_delta, darn_grid_stuff, med_filter, model):
     """
     Set up the state the workers read, before the pool is forked
     :param all_data: list[list[dict]] - Records of each radar
@@ -110,7 +106,6 @@ def _prime_shared_state(all_data, range_times, scan_delta, darn_grid_stuff, med_
     :param darn_grid_stuff: dict from FBI.grid.sdarn_grid()
     :param med_filter: True or False
     :param model: FBI.inversion.Model
-    :param cache_geometry: True or False
     """
 
     # Must come after the model is built. The model makes its own Apex at epoch 2015, and
@@ -118,8 +113,8 @@ def _prime_shared_state(all_data, range_times, scan_delta, darn_grid_stuff, med_
     # building ours last puts the epoch back to the one the data wants.
     apex = apexpy.Apex(range_times[0], refh=300)
 
-    if cache_geometry:
-        readwrite.prime_geometry_cache(model, apex, darn_grid_stuff)
+    # Everything saved for a scan that doesn't depend on the data
+    output_geometry = readwrite.output_geometry(model, apex, darn_grid_stuff)
 
     # Every gate any scan will use
     times = [[record_time(record) for record in radar] for radar in all_data]
@@ -132,19 +127,18 @@ def _prime_shared_state(all_data, range_times, scan_delta, darn_grid_stuff, med_
     # Everything about those gates the fits need, so a scan only has to look it up
     gate_geometry = _gate_geometry(gates, model, apex)
 
-    _freeze_arrays(list(vars(model).values()) + list(gate_geometry.values()))
+    _freeze_arrays([*vars(model).values(), *gate_geometry.values(), *output_geometry.values(),
+                    *output_geometry['v_matrix_model'], *output_geometry['v_matrix_darngrid']])
 
     _shared.update(all_data=all_data,
                    times=times,
                    range_times=range_times,
                    scan_delta=scan_delta,
-                   darn_grid_stuff=darn_grid_stuff,
                    med_filter=med_filter,
                    model=model,
-                   apex=apex,
                    gates=gates,
                    gate_geometry=gate_geometry,
-                   cache_geometry=cache_geometry)
+                   output_geometry=output_geometry)
 
 
 def _gate_geometry(gates, model, apex):
@@ -192,16 +186,6 @@ def _freeze_arrays(values, min_bytes=1 << 20):
                 pass
 
 
-def _reset_caches():
-    """
-    Clear the process-wide state set up by process().
-    None of it is keyed on the grid or the apex epoch, so it can't be reused between calls.
-    """
-
-    _shared.clear()
-    readwrite.reset_geometry_cache()
-
-
 def _lompe_one_scan(index):
     """
     Create the lompe fit for a single scan. This is what each worker runs.
@@ -233,8 +217,7 @@ def _lompe_one_scan(index):
                 'mlats': geometry['mlat'][row], 'mlons': geometry['mlon'][row],
                 'f': (geometry['f1'][:, row], geometry['f2'][:, row]), 'rids': rid}
 
-    return lompe_extract(model, m, los_data, _shared['apex'], scan_time, _shared['darn_grid_stuff'],
-                         use_cache=_shared['cache_geometry'])
+    return lompe_extract(_shared['output_geometry'], m, los_data, scan_time)
 
 
 def prepare_lompe_inputs(all_data, scan_time, scan_delta, med_filter):
