@@ -138,16 +138,10 @@ def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.dateti
     :param med_filter: bool - Median filter the data before putting into Lompe
     """
 
-    if len(date_range) != 2:
-        raise Exception("Date range must be a two element list, even if it's just the same date i.e "
-                        "[dt.datetime(yyyy,mm,dd),dt.datetime(yyyy,mm,dd)]")
+    date, end_date = _check_date_range(date_range)
 
     if fitacfs_root[-1] != '/':
         fitacfs_root += '/'
-
-    date, end_date = date_range
-    if end_date < date:
-        raise Exception("The end of the date_range is less than the beginning!")
 
     while date < end_date + dt.timedelta(days=1):
         fitacf_files = glob(fitacfs_root + date.strftime('%Y/%m') + "/*.fitacf*")
@@ -157,6 +151,23 @@ def process_dates(fitacfs_root: str, output_dir: str, date_range: list[dt.dateti
         else:
             print("Files not found, continuing...")
         date += dt.timedelta(days=1)
+
+
+def _check_date_range(date_range: list[dt.datetime]):
+    """
+    :param date_range: list[dt.datetime] - first and last day, can be the same day
+    :return: (dt.datetime, dt.datetime) the first and last day
+    """
+
+    if len(date_range) != 2:
+        raise Exception("Date range must be a two element list, even if it's just the same date i.e "
+                        "[dt.datetime(yyyy,mm,dd),dt.datetime(yyyy,mm,dd)]")
+
+    date, end_date = date_range
+    if end_date < date:
+        raise Exception("The end of the date_range is less than the beginning!")
+
+    return date, end_date
 
 
 def _fbi_file_span(fbi_file: str):
@@ -172,6 +183,33 @@ def _fbi_file_span(fbi_file: str):
 
     return (dt.datetime.strptime(match.group(1), "%Y%m%d%H%M%S"),
             dt.datetime.strptime(match.group(2), "%Y%m%d%H%M%S"))
+
+
+def _fbi_files_in_range(fbi_root: str, first_day: dt.datetime, last_day: dt.datetime) -> list[str]:
+    """
+    The FBI files covering any of the days from first_day to last_day, both included. Only the
+    YYYY/MM directories of those days are listed.
+    :param fbi_root: str - directory of the form fbi_root/YYYY/MM/FBI_<start>_<end>.hdf5, ending in '/'
+    :param first_day: dt.datetime - first day, its time of day is ignored
+    :param last_day: dt.datetime - last day, its time of day is ignored
+    :return: list[str] - sorted paths. Names that aren't FBI file names are left out
+    """
+
+    start = dt.datetime(first_day.year, first_day.month, first_day.day)
+    end = dt.datetime(last_day.year, last_day.month, last_day.day) + dt.timedelta(days=1)
+
+    fbi_files = []
+    month = dt.datetime(start.year, start.month, 1)
+    while month < end:
+        for fbi_file in glob(fbi_root + month.strftime('%Y/%m/') + '*.hdf5'):
+            span = _fbi_file_span(fbi_file)
+            if span is None:
+                print('Not an FBI file name, skipping: ' + fbi_file)
+            elif span[0] < end and span[1] > start:
+                fbi_files.append(fbi_file)
+        month = (month + dt.timedelta(days=32)).replace(day=1)
+
+    return sorted(fbi_files)
 
 
 def _plot_day_dir(plot_root: str, kind: str, day: dt.datetime) -> str:
@@ -224,17 +262,18 @@ def _plots_present(plot_root: str, kind: str, prefix: str, start: dt.datetime, e
     return count
 
 
-def plot_fbi_files(fbi_root: str, plot_root: str, cores=None, kinds=('vectors', 'potential_polar'),
-                   force=False) -> None:
+def plot_fbi_files(fbi_root: str, plot_root: str, date_range: list[dt.datetime], cores=None,
+                   kinds=('vectors', 'potential_polar'), force=False) -> None:
     """
-    Turns every FBI hdf5 file into plots, skipping the periods that are already done, so this
-    can be run daily against a directory that keeps growing. A file is only opened far enough to
-    count its records, for checking if a file is already done.
+    Turns the FBI hdf5 files of the days in date_range into plots, skipping the periods that are already done,
+    A file is only opened far enough to count its records, for checking if a file is already done.
     Must be called under an `if __name__ == '__main__':` guard, because plotting forks.
     :param fbi_root: str - Root directory holding the FBI hdf5 files written by process_dates(),
                      of the form fbi_root/YYYY/MM/FBI_<start>_<end>.hdf5
     :param plot_root: str - Root directory holding one subdirectory per kind. Images go into
                       plot_root/<kind>/YYYY/MM/DD/, which is created if it isn't there
+    :param date_range: list[dt.datetime] - First and last day to plot, both included, can be the same day.
+                       Every record of a file that covers any of those days is plotted
     :param cores: int - Number of worker processes. None uses every CPU available
     :param kinds: iterable[str] - Which plots to make. 'vectors', 'potential' or 'potential_polar'
     :param force: bool - Replot periods that already have their images
@@ -250,14 +289,17 @@ def plot_fbi_files(fbi_root: str, plot_root: str, cores=None, kinds=('vectors', 
         if kind not in PREFIXES:
             raise ValueError('kind must be one of ' + str(sorted(PREFIXES)) + ', not ' + repr(kind))
 
+    first_day, last_day = _check_date_range(date_range)
+
     if fbi_root[-1] != '/':
         fbi_root += '/'
     if plot_root[-1] != '/':
         plot_root += '/'
 
-    fbi_files = sorted(glob(fbi_root + '*/*/*.hdf5'))
+    fbi_files = _fbi_files_in_range(fbi_root, first_day, last_day)
     if not fbi_files:
-        print('No FBI files found in ' + fbi_root + '*/*/')
+        print('No FBI files found in ' + fbi_root + ' between ' + first_day.strftime('%Y-%m-%d') + ' and '
+              + last_day.strftime('%Y-%m-%d'))
         return
 
     print('Found ' + str(len(fbi_files)) + ' FBI files')
@@ -267,11 +309,7 @@ def plot_fbi_files(fbi_root: str, plot_root: str, cores=None, kinds=('vectors', 
 
     for fbi_file in fbi_files:
 
-        span = _fbi_file_span(fbi_file)
-        if span is None:
-            print('Not an FBI file name, skipping: ' + fbi_file)
-            continue
-        start, end = span
+        start, end = _fbi_file_span(fbi_file)
 
         # Only the number of records, which is metadata rather than data, so this stays cheap
         # enough to do for every file on every run

@@ -36,7 +36,7 @@ Velocities and potentials are compressed with HDF5's scale-offset filter, keepin
 
 # Plotting
 
-See [plotting_example.py](examples/plotting_example.py). `FBI.plotting.plot_main.plot_records()` plots a list of records from `fbi_load_hdf5()`, one image each, as `'vectors'`, `'potential'` or `'potential_polar'`. `FBI.extras.plot_fbi_files()` does a whole directory of FBI files, skipping what is already plotted, so it can be run daily.
+See [plotting_example.py](examples/plotting_example.py). `FBI.plotting.plot_main.plot_records()` plots a list of records from `fbi_load_hdf5()`, one image each, as `'vectors'`, `'potential'` or `'potential_polar'`. `FBI.extras.plot_fbi_files()` does the FBI files of a range of days, skipping what is already plotted.
 
 # Parallel processing
 

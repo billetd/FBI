@@ -34,13 +34,14 @@ def plot_one_file():
 
 def plot_everything():
     """
-    Turn a whole directory of FBI hdf5 files into plots, skipping whatever is already done.
+    Turn the FBI hdf5 files of a range of days into plots, skipping whatever is already done.
     Safe to run daily against a directory that keeps growing.
     """
 
     root = '/Volumes/The Box/FBI/test/batch_test/'
+    date_range = [dt.datetime(2025, 1, 31), dt.datetime(2025, 1, 31)]
 
-    plot_fbi_files(root + 'fbi_files/', root + 'fbi_plots/', cores=5,
+    plot_fbi_files(root + 'fbi_files/', root + 'fbi_plots/', date_range, cores=5,
                    kinds=('vectors', 'potential_polar'))
 
 

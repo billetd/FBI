@@ -1,5 +1,5 @@
 import datetime as dt
-from FBI.extras import _day_files, _hour_chunks, _existing_start_hours
+from FBI.extras import _day_files, _hour_chunks, _existing_start_hours, _fbi_files_in_range
 
 
 def test_day_files_and_chunks():
@@ -29,3 +29,21 @@ def test_existing_start_hours(tmp_path):
     assert sorted(_existing_start_hours(str(tmp_path) + '/', dt.datetime(2025, 1, 1))) == [0, 2]
     assert _existing_start_hours(str(tmp_path) + '/', dt.datetime(2025, 1, 10)) == [20]
     assert _existing_start_hours(str(tmp_path) + '/', dt.datetime(2025, 1, 11)) == []
+
+
+def test_fbi_files_in_range(tmp_path):
+    for start in (dt.datetime(2025, 1, 30, 22), dt.datetime(2025, 1, 31, 0), dt.datetime(2025, 1, 31, 22),
+                  dt.datetime(2025, 2, 1, 0), dt.datetime(2025, 3, 1, 0)):
+        end = start + dt.timedelta(hours=2)
+        month_dir = tmp_path / start.strftime('%Y/%m')
+        month_dir.mkdir(parents=True, exist_ok=True)
+        (month_dir / ('FBI_' + start.strftime('%Y%m%d%H%M%S') + '_' + end.strftime('%Y%m%d%H%M%S') + '.hdf5')).touch()
+
+    def names(first, last):
+        return [f.split('FBI_')[1][:10] for f in _fbi_files_in_range(str(tmp_path) + '/', first, last)]
+
+    # The file ending at midnight on Jan 31 belongs to Jan 30 only
+    assert names(dt.datetime(2025, 1, 31), dt.datetime(2025, 1, 31)) == ['2025013100', '2025013122']
+    # Across a month boundary, and the time of day doesn't narrow it
+    assert names(dt.datetime(2025, 1, 31, 12), dt.datetime(2025, 2, 1, 1)) == ['2025013100', '2025013122', '2025020100']
+    assert names(dt.datetime(2025, 2, 2), dt.datetime(2025, 2, 28)) == []
