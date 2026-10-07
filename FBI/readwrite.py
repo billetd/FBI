@@ -1,225 +1,225 @@
+"""
+The values saved for each scan, and reading and writing them to FBI hdf5 files
+"""
 import numpy as np
 import h5py
 import datetime as dt
 
+# How each dataset is saved, in the order they are written. Velocities and potentials are
+# rounded to whole numbers (scaleoffset=0) to save space.
+_ROUNDED = dict(compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=4)
+_COMPRESSED = dict(compression="gzip")
+_DATASETS = (
+    # Fit vectors for the lompe grid
+    ('v_e_model', _ROUNDED), ('v_n_model', _ROUNDED), ('mlats_model', _COMPRESSED), ('mlons_model', _COMPRESSED),
+    # Line-of-sight data going into the fit
+    ('v_e_los', _ROUNDED), ('v_n_los', _ROUNDED), ('mlats_los', _COMPRESSED), ('mlons_los', _COMPRESSED),
+    ('rids', _COMPRESSED),
+    # Fit vectors, at the locations of the SuperDARN equal area grid
+    ('v_e_darngrid', _ROUNDED), ('v_n_darngrid', _ROUNDED), ('mlats_darngrid', _COMPRESSED),
+    ('mlons_darngrid', _COMPRESSED),
+    # Electric potential on the Lompe grid
+    ('e_pot_model', _ROUNDED),
+    # Coordinates of the boundary of the fit
+    ('bound_mlats', _COMPRESSED), ('bound_mlons', _COMPRESSED),
+)
+_TIME_DATASETS = ('scan_year', 'scan_month', 'scan_day', 'scan_hour', 'scan_minute', 'scan_second',
+                  'scan_millisec')
 
-def lompe_extract(scan_lompe, apex, scan_time, darn_grid_stuff, rids):
+
+def output_geometry(model, apex, darn_grid_stuff):
     """
-    Code to extract potentials and velocities at good points for later plotting
-    These are the values saved to HDF5 later in fbi_write_hdf5()
-    :param scan_lompe:
-    :param apex:
-    :param scan_time:
-    :param darn_grid_stuff:
-    :param rids: NOTE - I think this needs to be fixed to remove radars outside of lompe grid area
-    :return:
+    Everything in lompe_extract() that depends only on the Lompe grid and the SuperDARN grid,
+    not on the data of a particular scan
+    :param model: FBI.inversion.Model
+    :param apex: apexpy.Apex object
+    :param darn_grid_stuff: dict from FBI.grid.sdarn_grid()
+    :return: dict of arrays
     """
 
     # Restrict the superdarn grid points to those only in the lompe grid
-    ingrid = scan_lompe.grid_E.ingrid(darn_grid_stuff['glons_darngrid'], darn_grid_stuff['glats_darngrid'])
+    ingrid = model.grid_E.ingrid(darn_grid_stuff['glons_darngrid'], darn_grid_stuff['glats_darngrid'])
     glats_darngrid = darn_grid_stuff['glats_darngrid'][ingrid]
     glons_darngrid = darn_grid_stuff['glons_darngrid'][ingrid]
-    mlats_darngrid = darn_grid_stuff['mlats_darngrid'][ingrid]
-    mlons_darngrid = darn_grid_stuff['mlons_darngrid'][ingrid]
-    # Include rids here
 
-    # Darngrid velocities
-    v_e_geo_darngrid, v_n_geo_darngrid = scan_lompe.v(lon=glons_darngrid, lat=glats_darngrid)
-
-    # Model velocities and points
-    v_e_geo_model, v_n_geo_model = scan_lompe.v()
-    glats_model, glons_model = scan_lompe.grid_J.lat.flatten(), scan_lompe.grid_J.lon.flatten()
+    # Model grid points
+    glats_model, glons_model = model.grid_J.lat.flatten(), model.grid_J.lon.flatten()
     mlats_model, mlons_model = apex.geo2apex(glats_model, glons_model, 300)
 
-    # Data velocities and points
-    v_e_geo_los, v_n_geo_los = (scan_lompe.data['convection'][0].values * scan_lompe.data['convection'][0].los_mag[0],
-                                scan_lompe.data['convection'][0].values * scan_lompe.data['convection'][0].los_mag[1])
-    glons_los, glats_los = (scan_lompe.data['convection'][0].coords['lon'],
-                            scan_lompe.data['convection'][0].coords['lat'])
-    mlats_los, mlons_los = apex.geo2apex(glats_los, glons_los, 300)
-
     # Locations of the model boundary
-    bound_lons = np.concatenate((scan_lompe.grid_J.lon[0, :], scan_lompe.grid_J.lon[:, -1],
-                                 np.flip(scan_lompe.grid_J.lon[-1, :]), np.flip(scan_lompe.grid_J.lon[:, 0])))
-    bound_lats = np.concatenate((scan_lompe.grid_J.lat[0, :], scan_lompe.grid_J.lat[:, -1],
-                                 np.flip(scan_lompe.grid_J.lat[-1, :]), np.flip(scan_lompe.grid_J.lat[:, 0])))
+    lon, lat = model.grid_J.lon, model.grid_J.lat
+    bound_lons = np.concatenate((lon[0, :], lon[:, -1], np.flip(lon[-1, :]), np.flip(lon[:, 0])))
+    bound_lats = np.concatenate((lat[0, :], lat[:, -1], np.flip(lat[-1, :]), np.flip(lat[:, 0])))
     bound_mlats, bound_mlons = apex.geo2apex(bound_lats, bound_lons, 300)
 
-    # Electric potential
-    e_pot_model = scan_lompe.E_pot()
+    return {'mlats_darngrid': darn_grid_stuff['mlats_darngrid'][ingrid],
+            'mlons_darngrid': darn_grid_stuff['mlons_darngrid'][ingrid],
+            'mlats_model': mlats_model, 'mlons_model': mlons_model,
+            'bound_mlats': bound_mlats, 'bound_mlons': bound_mlons,
+            # Apex base vectors
+            'f_model': apex.basevectors_qd(glats_model, glons_model, 300, coords='geo'),
+            'f_darngrid': apex.basevectors_qd(glats_darngrid, glons_darngrid, 300, coords='geo'),
+            # SECS matrices. The velocities and potential are just these dotted with the model vector.
+            'v_matrix_model': model.v_matrix(),
+            'v_matrix_darngrid': model.v_matrix(glons_darngrid, glats_darngrid),
+            'pot_matrix_model': model.potential_matrix()}
 
-    # Time
-    hour = scan_time.hour
-    minute = scan_time.minute
-    second = scan_time.second
-    year = scan_time.year
-    month = scan_time.month
-    day = scan_time.day
-    millisec = scan_time.microsecond
 
-    # Convert model velocities to mag frame
-    # Get apex base vectors in geographic
-    f1, f2 = apex.basevectors_qd(glats_model, glons_model, 300, coords='geo')
-    # Rotate the geo veolocity vectors into magnetic using the base vectors
-    # Richmond (1995) equations (7.12) and (7.13) but for velocity vectors
-    v_geo_grid = np.vstack((v_e_geo_model, v_n_geo_model))
-    v_e_model = np.einsum('ij,ij->j', f1, v_geo_grid)
-    v_n_model = np.einsum('ij,ij->j', f2, v_geo_grid)
+def _to_qd(f, v_e_geo, v_n_geo):
+    """
+    Rotate geographic velocity components into the magnetic (quasi-dipole) frame using
+    apex base vectors. The direction is the motion across the QD grid, from the gradients of
+    QD longitude and latitude (f2 x k and k x f1, F times g1 and g2 in Richmond (1995)
+    equations (6.3) and (6.4)). The QD grid lines aren't perpendicular, so projecting onto
+    f1 and f2 directly would skew the vectors. The speed is kept as the geographic speed.
 
-    # Convert data velocities to mag frame
-    # Get apex base vectors in geographic
-    f1, f2 = apex.basevectors_qd(glats_los, glons_los, 300, coords='geo')
-    # Rotate the geo veolocity vectors into magnetic using the base vectors
-    # Richmond (1995) equations (7.12) and (7.13) but for velocity vectors
-    v_geo_grid = np.vstack((v_e_geo_los, v_n_geo_los))
-    v_e_los = np.einsum('ij,ij->j', f1, v_geo_grid)
-    v_n_los = np.einsum('ij,ij->j', f2, v_geo_grid)
+    :param f: (f1, f2) tuple as returned by apexpy.Apex.basevectors_qd()
+    :param v_e_geo: eastward velocity components
+    :param v_n_geo: northward velocity components
+    :return: (v_e_mag, v_n_mag)
+    """
+    f1, f2 = f
+    v_e_mag = f2[1] * v_e_geo - f2[0] * v_n_geo
+    v_n_mag = -f1[1] * v_e_geo + f1[0] * v_n_geo
 
-    # darngrid velocities to mag frame
-    f1, f2 = apex.basevectors_qd(glats_darngrid, glons_darngrid, 300, coords='geo')
-    # Rotate the geo veolocity vectors into magnetic using the base vectors
-    # Richmond (1995) equations (7.12) and (7.13) but for velocity vectors
-    v_geo_grid = np.vstack((v_e_geo_darngrid, v_n_geo_darngrid))
-    v_e_darngrid = np.einsum('ij,ij->j', f1, v_geo_grid)
-    v_n_darngrid = np.einsum('ij,ij->j', f2, v_geo_grid)
+    # Back to the geographic speed
+    speed_geo, speed_mag = np.hypot(v_e_geo, v_n_geo), np.hypot(v_e_mag, v_n_mag)
+    scale = np.divide(speed_geo, speed_mag, out=np.zeros_like(speed_mag), where=speed_mag != 0)
+    return v_e_mag * scale, v_n_mag * scale
 
-    data = {'v_e_model': v_e_model.tolist(), 'v_n_model': v_n_model.tolist(),
-            'mlats_model': mlats_model.tolist(), 'mlons_model': mlons_model.tolist(),
-            'v_e_los': v_e_los.tolist(), 'v_n_los': v_n_los.tolist(), 'rids': rids,
-            'mlats_los': mlats_los.tolist(), 'mlons_los': mlons_los.tolist(),
-            'v_e_darngrid': v_e_darngrid.tolist(), 'v_n_darngrid': v_n_darngrid.tolist(),
-            'mlats_darngrid': mlats_darngrid.tolist(), 'mlons_darngrid': mlons_darngrid.tolist(),
-            'e_pot_model': e_pot_model.tolist(),
-            'bound_mlats': bound_mlats.tolist(), 'bound_mlons': bound_mlons.tolist(),
-            'scan_year': year, 'scan_month': month, 'scan_day': day, 'scan_hour': hour,
-            'scan_minute': minute, 'scan_second': second, 'scan_millisec': millisec}
 
-    return data
+def lompe_extract(geometry, m, los, scan_time):
+    """
+    Potentials and velocities at good points for later plotting. These are the values saved
+    to the hdf5 file.
+    :param geometry: dict from output_geometry()
+    :param m: model vector from FBI.inversion.Model.solve()
+    :param los: dict of the data that went into the fit: geographic velocity 'v_e_geo' and 'v_n_geo',
+                position 'mlats' and 'mlons', QD base vectors 'f' and station ids 'rids'
+    :param scan_time: datetime of the scan
+    :return: dict, one entry per dataset
+    """
+
+    # Model and darngrid velocities, rotated into the magnetic frame along with the data
+    v_e_model, v_n_model = _to_qd(geometry['f_model'], *(V.dot(m) for V in geometry['v_matrix_model']))
+    v_e_darngrid, v_n_darngrid = _to_qd(geometry['f_darngrid'], *(V.dot(m) for V in geometry['v_matrix_darngrid']))
+    v_e_los, v_n_los = _to_qd(los['f'], los['v_e_geo'], los['v_n_geo'])
+
+    return {'v_e_model': v_e_model, 'v_n_model': v_n_model,
+            'mlats_model': geometry['mlats_model'], 'mlons_model': geometry['mlons_model'],
+            'v_e_los': v_e_los, 'v_n_los': v_n_los, 'rids': los['rids'],
+            'mlats_los': los['mlats'], 'mlons_los': los['mlons'],
+            'v_e_darngrid': v_e_darngrid, 'v_n_darngrid': v_n_darngrid,
+            'mlats_darngrid': geometry['mlats_darngrid'], 'mlons_darngrid': geometry['mlons_darngrid'],
+            'e_pot_model': geometry['pot_matrix_model'].dot(m),
+            'bound_mlats': geometry['bound_mlats'], 'bound_mlons': geometry['bound_mlons'],
+            'scan_year': scan_time.year, 'scan_month': scan_time.month, 'scan_day': scan_time.day,
+            'scan_hour': scan_time.hour, 'scan_minute': scan_time.minute,
+            'scan_second': scan_time.second, 'scan_millisec': scan_time.microsecond}
+
+
+def fbi_hdf5_name(timerange):
+    """
+    Name of the output file for a given timerange
+    :param timerange: list[datetime] - Start and end times
+    :return: str
+    """
+
+    return ('FBI_' + timerange[0].strftime("%Y%m%d%H%M%S") + '_'
+            + timerange[1].strftime("%Y%m%d%H%M%S") + ".hdf5")
+
+
+class FBIWriter:
+    """
+    Writes each scan to the hdf5 file as it is fitted, so a whole run of them never has
+    to be held in memory at once. One group per scan index, skipping scans with no fit.
+
+    Usage:
+        with FBIWriter(timerange, lompe_dir) as writer:
+            writer.write(index, lompe_data)
+    """
+
+    def __init__(self, timerange, lompe_dir):
+        """
+        :param timerange: list[datetime] - Start and end times, used for the file name
+        :param lompe_dir: str - Directory to save the FBI output file in
+        """
+
+        if not lompe_dir.endswith('/'):
+            lompe_dir += '/'
+        self.path = lompe_dir + fbi_hdf5_name(timerange)
+        self._f = None
+        self.n_written = 0
+
+    def __enter__(self):
+        print('Writing to ' + self.path)
+        self._f = h5py.File(self.path, "w")
+        return self
+
+    def write(self, index, lompe):
+        """
+        :param index: int - scan index, used as the group name
+        :param lompe: dict from lompe_extract(), or None if the scan produced no fit
+        """
+
+        if lompe is None:
+            return
+
+        grp = self._f.create_group(str(index))
+        for name, options in _DATASETS:
+            grp.create_dataset(name, data=lompe[name], **options)
+        for name in _TIME_DATASETS:
+            grp.create_dataset(name, shape=1, data=lompe[name])
+        self.n_written += 1
+
+    def __exit__(self, *exc):
+        self._f.close()
+        self._f = None
+        return False
 
 
 def fbi_save_hdf5(lompes, timerange, lompe_dir):
     """
-    Save the output from process() into a hdf5 file
-    :param lompes:
-    :param timerange:
-    :param lompe_dir:
-    :return:
+    Save a complete list of scans into a hdf5 file, all at once
+    :param lompes: list of lompe_extract() dicts, None where no fit was made
+    :param timerange: list[datetime] - Start and end times
+    :param lompe_dir: str - Directory to save the FBI output file in
     """
 
-    # Dump data to hdf5 file
-    print('Writing to file...')
-    hdf5name = 'FBI_' + timerange[0].strftime("%Y%m%d%H%M%S") + '_' + timerange[1].strftime("%Y%m%d%H%M%S") + ".hdf5"
-    with h5py.File(lompe_dir + hdf5name, "w") as f:
+    with FBIWriter(timerange, lompe_dir) as writer:
         for counter, lompe in enumerate(lompes):
-            if lompe is not None:
-                grp = f.create_group(str(counter))
-
-                # Fit vectors for the lompe grid
-                grp.create_dataset("v_e_model", shape=(len(lompe['v_e_model'])), data=lompe['v_e_model'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-                grp.create_dataset("v_n_model", shape=(len(lompe['v_n_model'])), data=lompe['v_n_model'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-                grp.create_dataset("mlats_model", shape=(len(lompe['mlats_model'])), data=lompe['mlats_model'],
-                                   compression="gzip")
-                grp.create_dataset("mlons_model", shape=(len(lompe['mlons_model'])), data=lompe['mlons_model'],
-                                   compression="gzip")
-
-                # Line-of-sight data going into the fit
-                grp.create_dataset("v_e_los", shape=(len(lompe['v_e_los'])), data=lompe['v_e_los'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-                grp.create_dataset("v_n_los", shape=(len(lompe['v_n_los'])), data=lompe['v_n_los'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-                grp.create_dataset("mlats_los", shape=(len(lompe['mlats_los'])), data=lompe['mlats_los'],
-                                   compression="gzip")
-                grp.create_dataset("mlons_los", shape=(len(lompe['mlons_los'])), data=lompe['mlons_los'],
-                                   compression="gzip")
-                grp.create_dataset("rids", shape=(len(lompe['rids'])), data=lompe['rids'], compression="gzip")
-
-                # Fit vectors, at the locations of the SuperDARN equal area grid
-                grp.create_dataset("v_e_darngrid", shape=(len(lompe['v_e_darngrid'])), data=lompe['v_e_darngrid'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-                grp.create_dataset("v_n_darngrid", shape=(len(lompe['v_n_darngrid'])), data=lompe['v_n_darngrid'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-                grp.create_dataset("mlats_darngrid", shape=(len(lompe['mlats_darngrid'])), data=lompe['mlats_darngrid'],
-                                   compression="gzip")
-                grp.create_dataset("mlons_darngrid", shape=(len(lompe['mlons_darngrid'])), data=lompe['mlons_darngrid'],
-                                   compression="gzip")
-
-                # Electric potential on the Lompe grid
-                grp.create_dataset("e_pot_model", shape=(len(lompe['e_pot_model'])), data=lompe['e_pot_model'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-
-                # Coordinates of the boundary of the fit
-                grp.create_dataset("bound_mlats", shape=(len(lompe['bound_mlats'])), data=lompe['bound_mlats'],
-                                   compression="gzip")
-                grp.create_dataset("bound_mlons", shape=(len(lompe['bound_mlons'])), data=lompe['bound_mlons'],
-                                   compression="gzip")
-
-                # Time info
-                grp.create_dataset("scan_year", shape=1, data=lompe['scan_year'], compression="gzip",
-                                   chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-                grp.create_dataset("scan_month", shape=1, data=lompe['scan_month'], compression="gzip",
-                                   chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-                grp.create_dataset("scan_day", shape=1, data=lompe['scan_day'], compression="gzip",
-                                   chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-                grp.create_dataset("scan_hour", shape=1, data=lompe['scan_hour'], compression="gzip",
-                                   chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-                grp.create_dataset("scan_minute", shape=1, data=lompe['scan_minute'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-                grp.create_dataset("scan_second", shape=1, data=lompe['scan_second'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
-                grp.create_dataset("scan_millisec", shape=1, data=lompe['scan_millisec'],
-                                   compression="gzip", chunks=True, shuffle=True, scaleoffset=0, compression_opts=9)
+            writer.write(counter, lompe)
 
 
-def fbi_load_hdf5(file, timerange=None):
+def fbi_load_hdf5(file, timerange=None, as_arrays=False):
     """
-    Load the data saved by fbi_save_hdf5()
+    Load the data saved by FBIWriter or fbi_save_hdf5()
     Use timerange as a datetime tuple to only read in between two times
     :param file: Path to the FBI hdf5 file
     :param timerange: Optional. [start_time, end_time] datetime objects from a period of time to read in.
+    :param as_arrays: Keep the datasets as numpy arrays rather than converting to lists
     :return: lompes: list of dictionaries containing the data
     """
 
     print('Reading: ' + file)
 
+    lompes = []
     with h5py.File(file, "r") as f:
-        lompes = []
-        groups_keys = list(f.keys())
 
-        # Fix the wonky hdf5 sorting
-        group_ints = [int(group) for group in groups_keys]
-        group_ints.sort()
-        groups = [str(group) for group in group_ints]
-
-        # Iterate over records
-        for group in groups:
-
-            datasets = f[group].keys()
+        # Groups are named by scan index, which hdf5 sorts as strings
+        for name in sorted(f.keys(), key=int):
+            group = f[name]
 
             # Check if it's within the timerange, if using
             if timerange:
-                this_time = dt.datetime(f[group + '/' + 'scan_year'][0],
-                                        f[group + '/' + 'scan_month'][0],
-                                        f[group + '/' + 'scan_day'][0],
-                                        f[group + '/' + 'scan_hour'][0],
-                                        f[group + '/' + 'scan_minute'][0],
-                                        f[group + '/' + 'scan_second'][0])
-                if timerange[0] <= this_time < timerange[1]:
-                    pass
-                else:
+                this_time = dt.datetime(*(group[key][0] for key in _TIME_DATASETS[:6]))
+                if not timerange[0] <= this_time < timerange[1]:
                     continue
 
             this_record = {}
-            # Iterate over keys
-            for dataset in datasets:
-
-                this_record[dataset] = f[group + '/' + dataset][()].tolist()
-
-            # Append to list of dictionaries
+            for dataset in group:
+                values = group[dataset][()]
+                this_record[dataset] = values if as_arrays else values.tolist()
             lompes.append(this_record)
 
     return lompes
-
-
-

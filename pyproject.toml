@@ -5,40 +5,33 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "FBI"
 dynamic = ["version"]
-# Note: To install, must specify one of [local] or [from_github]
+requires-python = ">=3.11"
 dependencies = [
-    "ray",
     "numpy < 2.3.0",
-    "apexpy @ git+https://github.com/aburrell/apexpy@develop",
-    "spaceweather",
+    "scipy",
+    "ppigrf",
+    "apexpy >= 2.1.1",
     "h5py",
     "matplotlib",
     "cartopy",
-    "geodarn @ git+https://github.com/billetd/geodarn.git@main",
-    "pydarn @ git+https://github.com/SuperDARN/pydarn@develop",
-    "pydarnio",
-    "lompe @ git+https://github.com/billetd/lompe.git@main",
+    "shapely",
+    # Vectorised gate2geographic_location(), until SuperDARN/pydarn#450 is merged
+    "pydarn @ git+https://github.com/SuperDARN/pydarn@ehn/gate2geo_vectorisation",
+    "lompe @ git+https://github.com/klaundal/lompe.git@main",
     "dipole @ git+https://github.com/klaundal/dipole.git@main#egg=dipole",
     "polplot @ git+https://github.com/klaundal/polplot.git@main#egg=polplot",
     "secsy @ git+https://github.com/klaundal/secsy.git@main#egg=secsy",
 ]
 
 [project.optional-dependencies]
-# For the case where you have already installed these locally
-#  (e.g. with a --editable install)
-local = [
-]
-# To use the online versions instead
-deps-from-github = [
-]
-extras = [
-]
 dev = [
+    "pytest",
 ]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["FBI"]
+include = ["FBI", "FBI.*"]
+namespaces = false
 
 [tool.setuptools_scm]
 

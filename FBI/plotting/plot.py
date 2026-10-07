@@ -1,19 +1,17 @@
 import cartopy.crs as ccrs
 import numpy as np
-from geodarn.gridding import create_grid_records
 from matplotlib import pyplot as plt, ticker, cm
 from matplotlib.colors import Normalize
-from FBI.grid import Container
+from FBI.grid import darn_grid_cell_index
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 
 def plot_noon_line(apex, time, coord='mlt'):
     """
-
-    :param apex:
-    :param time:
-    :param coord:
-    :return:
+    Line from 80 to 90 degrees magnetic latitude, pointing towards magnetic noon
+    :param apex: apexpy.Apex object
+    :param time: datetime
+    :param coord: Only 'mag' is supported
     """
 
     if coord == 'mag':
@@ -26,41 +24,29 @@ def plot_noon_line(apex, time, coord='mlt'):
 
 def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
     """
-
-    :param lompe:
-    :param ax:
-    :param coord:
-    :return:
+    Fit velocity vectors on the SuperDARN equal area grid, drawn thicker in cells with data
+    :param lompe: dict - One record from readwrite.fbi_load_hdf5()
+    :param ax: cartopy axis from axis.get_local_axis()
+    :param coord: Only 'mag' draws anything
+    :return: (thin quiver, thick quiver)
     """
 
-    # Get the locations of data
-    data_mlats = lompe['mlats_los']
-    data_mlons = lompe['mlons_los']
-
     # Grid the data locations, so we can see where we want to highlight them when plotting
-    # Put in a dictionary for the gridding code
-    # from BorealisConvection.lompe_gridding import Container
-    location = np.array([data_mlons, data_mlats]).T
-    located = Container(location=location)
-    idx_in_grid, darn_grid = create_grid_records(located)
-    mlons_grid = darn_grid[:, 0]
-    mlats_grid = darn_grid[:, 1]
+    data_cells = darn_grid_cell_index(lompe['mlons_los'], lompe['mlats_los'])
 
     # Get velocity vectors and points of grid
     v_emag = np.array(lompe['v_e_darngrid'])
     v_nmag = np.array(lompe['v_n_darngrid'])
     mlons = np.array(lompe['mlons_darngrid'])
-
-    # Seems to be a problem with floating point precision if this isn't done
-    # This whole method could use re-working tbh. Currently quite janky.
-    # TODO: Rework method for finding grid cells with data
-    mlons = np.round(mlons)
     mlats = np.array(lompe['mlats_darngrid'])
-    hilats = np.where(mlats > 89)
-    mlats = np.delete(mlats, hilats)
-    mlons = np.delete(mlons, hilats)
-    v_emag = np.delete(v_emag, hilats)
-    v_nmag = np.delete(v_nmag, hilats)
+
+    # Vectors in grid cells with data in them
+    thick = np.isin(darn_grid_cell_index(mlons, mlats), data_cells[data_cells >= 0])
+
+    # Vectors are plotted at the nearest whole degree of longitude, and not at the pole
+    keep = ~(mlats > 89)
+    mlons, mlats = np.round(mlons)[keep], mlats[keep]
+    v_emag, v_nmag, thick = v_emag[keep], v_nmag[keep], thick[keep]
 
     # Rotate and scale vectors (https://github.com/SciTools/cartopy/issues/1179)
     u_src_crs = v_emag / np.cos(mlats / 180 * np.pi)
@@ -68,40 +54,24 @@ def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
     magnitude = np.sqrt(v_emag ** 2 + v_nmag ** 2)
     magn_src_crs = np.sqrt(u_src_crs ** 2 + v_src_crs ** 2)
 
+    # Put the stretched vectors back to the right length. Velocities are rounded to whole
+    # m/s on write, so a cell can be zero in both components. Those get zero length.
+    nonzero = magn_src_crs != 0
+    u_plot = np.divide(u_src_crs * magnitude, magn_src_crs, out=np.zeros_like(magnitude), where=nonzero)
+    v_plot = np.divide(v_src_crs * magnitude, magn_src_crs, out=np.zeros_like(magnitude), where=nonzero)
+
     colours_norm = Normalize(vmin=0, vmax=1000)
     if coord == 'mag':
 
         # Plot all the vectors at grid points normally
-        quiv_thin = ax.quiver(mlons, mlats, u_src_crs * magnitude / magn_src_crs, v_src_crs * magnitude / magn_src_crs,
+        quiv_thin = ax.quiver(mlons, mlats, u_plot, v_plot,
                               magnitude, norm=colours_norm, scale=2000, scale_units='inches', width=0.001,
                               headwidth=3, transform=ccrs.PlateCarree(), angles='xy', cmap='viridis', zorder=3)
 
-        # Figure out the velocities of data points which fall in the sdarn grid
-        mlats_idx = mlats_grid[idx_in_grid].compressed()
-        mlons_idx = mlons_grid[idx_in_grid].compressed()
-        locs = []
-        for this_mlat, this_mlon in zip(mlats_idx, mlons_idx):
-            loc = np.where((this_mlat == mlats) & ((np.floor(this_mlon) == mlons) | (np.ceil(this_mlon) == mlons)))
-            if len(loc[0]) > 0:
-                locs.append(loc[0])
-
-        u_src_crs_thick = u_src_crs[locs]
-        v_src_crs_thick = v_src_crs[locs]
-        magnitude_thick = magnitude[locs]
-        magn_src_crs_thick = magn_src_crs[locs]
-        thick_mlons = mlons[locs]
-        thick_mlats = mlats[locs]
-
-        # Plot thick vectors
-        quiv_thick = ax.quiver(thick_mlons, thick_mlats, u_src_crs_thick * magnitude_thick /
-                               magn_src_crs_thick, v_src_crs_thick * magnitude_thick / magn_src_crs_thick,
-                               magnitude_thick, norm=colours_norm, scale=2000, scale_units='inches', width=0.003,
+        # Thicker vectors in the grid cells with data
+        quiv_thick = ax.quiver(mlons[thick], mlats[thick], u_plot[thick], v_plot[thick],
+                               magnitude[thick], norm=colours_norm, scale=2000, scale_units='inches', width=0.003,
                                headwidth=3, transform=ccrs.PlateCarree(), angles='xy', cmap='viridis', zorder=3)
-        # Plot thick vectors
-        # quiv_thick = ax.quiver(thick_mlons, thick_mlats, u_src_crs_thick * magnitude_thick /
-        #                        magn_src_crs_thick, v_src_crs_thick * magnitude_thick / magn_src_crs_thick,
-        #                        magnitude_thick, norm=colours_norm, scale=2000, scale_units='inches', width=0.002,
-        #                        headwidth=3, transform=ccrs.PlateCarree(), angles='xy', cmap='viridis', zorder=3)
     else:
         quiv_thick = None
         quiv_thin = None
@@ -126,12 +96,20 @@ def plot_vecs_model_darn_grid(lompe, ax, coord='mag'):
 
 
 def plot_potential_contours(lompe, ot, apex, time, coord='mag'):
+    """
+    Filled contours of the electric potential, with a colour bar
+    :param lompe: dict - One record from readwrite.fbi_load_hdf5()
+    :param ot: The projection of the axis for 'mag', or the polplot Polarplot for 'mlt'
+    :param apex: apexpy.Apex object
+    :param time: datetime, for magnetic local time
+    :param coord: 'mag' or 'mlt'
+    """
 
     V = np.array(lompe['e_pot_model'])/1000
     pot_mlat = np.array(lompe['mlats_model'])
     pot_mlon = np.array(lompe['mlons_model'])
 
-    # Work out min and max potential values to contour based on min and max in V array, rounded up to nearest 10
+    # Fixed range of contours, ten each side of zero
     vmax = 60
     pot_zmin = -vmax
     pot_zmax = vmax
@@ -164,6 +142,14 @@ def plot_potential_contours(lompe, ot, apex, time, coord='mag'):
 
 
 def plot_data_locs(lompe, ax, apex=None, time=None, coord='mag'):
+    """
+    Locations of the SuperDARN data that went into the fit
+    :param lompe: dict - One record from readwrite.fbi_load_hdf5()
+    :param ax: cartopy axis for 'mag', or polplot Polarplot for 'mlt'
+    :param apex: apexpy.Apex object, for 'mlt'
+    :param time: datetime, for 'mlt'
+    :param coord: 'mag' or 'mlt'
+    """
 
     # Get coordinates
     data_mlats = lompe['mlats_los']
@@ -178,6 +164,13 @@ def plot_data_locs(lompe, ax, apex=None, time=None, coord='mag'):
 
 
 def plot_boundary_box(lompe, ax, apex, time):
+    """
+    Boundary of the fit, on a polar plot
+    :param lompe: dict - One record from readwrite.fbi_load_hdf5()
+    :param ax: polplot Polarplot
+    :param apex: apexpy.Apex object
+    :param time: datetime, for magnetic local time
+    """
 
     # Get the coordinates of the boundary of the fit
     bound_mlts = apex.mlon2mlt(lompe['bound_mlons'], time)
